@@ -1,0 +1,7 @@
+{
+  "id": "competition",
+  "name": "大学生竞赛审查",
+  "version": "0.1.0",
+  "documentTypes": ["notice", "application", "proposal", "member_list", "evidence"],
+  "factFields": ["project_name", "leader", "members", "advisor", "school", "track", "deadline"]
+}

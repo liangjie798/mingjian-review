@@ -1,0 +1,7 @@
+{
+  "id": "contract",
+  "name": "合同审查",
+  "version": "0.1.0",
+  "documentTypes": ["contract", "quotation", "delivery_list", "internal_policy"],
+  "factFields": ["party_a", "party_b", "amount", "tax_rate", "payment_terms", "delivery_date"]
+}

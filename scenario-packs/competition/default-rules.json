@@ -1,0 +1,16 @@
+[
+  {
+    "ruleId": "competition.required_documents",
+    "category": "completeness",
+    "description": "检查必交材料是否齐全",
+    "severity": "blocking",
+    "executor": "required_document_set"
+  },
+  {
+    "ruleId": "competition.project_name_consistency",
+    "category": "consistency",
+    "description": "检查项目名称在各材料中是否一致",
+    "severity": "high",
+    "executor": "normalized_exact_match"
+  }
+]

@@ -1,0 +1,16 @@
+[
+  {
+    "ruleId": "contract.party_consistency",
+    "category": "consistency",
+    "description": "检查合同正文与附件中的签约主体是否一致",
+    "severity": "high",
+    "executor": "normalized_entity_match"
+  },
+  {
+    "ruleId": "contract.amount_recalculation",
+    "category": "calculation",
+    "description": "重新计算分项金额并与合同总额核对",
+    "severity": "high",
+    "executor": "decimal_sum_check"
+  }
+]
