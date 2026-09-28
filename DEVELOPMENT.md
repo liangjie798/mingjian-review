@@ -2,9 +2,9 @@
 
 ## 1. 当前版本
 
-- 版本：0.3.0 Native Desktop
+- 版本：0.4.0 Qt Desktop
 - 平台：Windows 10/11 x64
-- 桌面框架：CustomTkinter原生窗口
+- 桌面框架：PySide6 / Qt Widgets原生窗口
 - 审查引擎：Python 3.13纯本地模块
 - 官网：独立HTML、CSS和JavaScript静态站点
 - 打包：PyInstaller单文件模式
@@ -30,7 +30,7 @@
 ## 3. 系统架构
 
 ```text
-CustomTkinter原生工作台
+PySide6 / Qt Widgets原生工作台
         │ Python函数调用
         ▼
 本地审查引擎
@@ -154,11 +154,13 @@ files=<一个或多个文件>
 
 1. 创建`.venv`并安装`requirements-desktop.txt`；
 2. 使用`mingjian.spec`生成单文件EXE；
-3. 嵌入CustomTkinter主题、应用图标和场景包；
+3. 嵌入Qt运行库、QSS视觉主题、应用图标和场景包；
 4. 计算SHA-256并写入校验文件；
 5. 将EXE和校验文件同步到官网的下载目录。
 
 PyInstaller明确排除FastAPI、Uvicorn、PyWebView、Starlette和Pydantic，桌面产物不包含Web运行时。
+
+Windows构建还会排除开发环境中Poppler可能注入的`icuuc.dll`和`icudt78.dll`。Qt 6.11在Windows上使用系统ICU；误打包Poppler的ICU 78会覆盖系统库，并在启动时触发`DLL load failed while importing QtCore`。`mingjian.spec`已固定这项规则，同时统一使用PySide6附带的MSVC运行库。
 
 ## 10. 验证
 

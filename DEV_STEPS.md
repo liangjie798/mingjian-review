@@ -124,7 +124,7 @@
 
 ## 9. 阶段六：桌面打包
 
-采用`CustomTkinter + Python审查引擎 + PyInstaller`：
+采用`PySide6 + Python审查引擎 + PyInstaller`：
 
 1. 原生窗口直接调用Python审查函数。
 2. 文件解析与规则执行放入后台线程。

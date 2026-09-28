@@ -1,34 +1,67 @@
 from __future__ import annotations
 
-import threading
 import sys
 from pathlib import Path
-from tkinter import filedialog, messagebox
 
-import customtkinter as ctk
+from PySide6.QtCore import QObject, QSize, Qt, QThread, Signal, Slot
+from PySide6.QtGui import QColor, QFont, QIcon, QPalette
+from PySide6.QtWidgets import (
+    QApplication,
+    QButtonGroup,
+    QFileDialog,
+    QFrame,
+    QHBoxLayout,
+    QLabel,
+    QListWidget,
+    QListWidgetItem,
+    QMainWindow,
+    QMessageBox,
+    QPushButton,
+    QScrollArea,
+    QSizePolicy,
+    QSplitter,
+    QVBoxLayout,
+    QWidget,
+)
 
 from backend.review_engine import Finding, ReviewResult, SUPPORTED_SUFFIXES, review_paths
 
 
 COLORS = {
-    "app": "#0B0E12", "sidebar": "#10141A", "panel": "#141920", "panel_alt": "#181E26",
-    "border": "#27303B", "text": "#F2F5F7", "muted": "#8D98A5", "accent": "#4BE0AE",
-    "accent_hover": "#68E8BC", "accent_dark": "#123C31", "danger": "#FF6B6B",
-    "warning": "#FFB454", "medium": "#F2D06B", "info": "#70B7FF",
+    "app": "#0A0E13",
+    "sidebar": "#0E131A",
+    "panel": "#111820",
+    "panel_alt": "#161E27",
+    "border": "#27323D",
+    "text": "#F3F6F8",
+    "muted": "#8D99A6",
+    "accent": "#49DDAA",
+    "accent_hover": "#6BE8BC",
+    "accent_dark": "#10392E",
+    "danger": "#FF6B73",
+    "warning": "#FFB45D",
+    "medium": "#E9CB68",
+    "info": "#6FB7FF",
 }
 
 SEVERITY_META = {
-    "blocking": ("阻断", COLORS["danger"]), "high": ("高风险", COLORS["warning"]),
-    "medium": ("需关注", COLORS["medium"]), "info": ("提示", COLORS["info"]),
+    "blocking": ("阻断", COLORS["danger"]),
+    "high": ("高风险", COLORS["warning"]),
+    "medium": ("需关注", COLORS["medium"]),
+    "info": ("提示", COLORS["info"]),
 }
 
 SCENARIOS = {
     "competition": {
-        "title": "大学生竞赛审查", "subtitle": "核对材料完整性、团队信息和跨文件一致性",
+        "title": "大学生竞赛审查",
+        "nav": "竞赛材料审查",
+        "subtitle": "核对材料完整性、团队信息和跨文件一致性",
         "hint": "建议添加比赛通知、报名表、项目书和承诺书",
     },
     "contract": {
-        "title": "合同审查", "subtitle": "检查付款比例、验收期限和关键条款风险",
+        "title": "合同审查",
+        "nav": "合同条款审查",
+        "subtitle": "检查付款比例、验收期限和关键条款风险",
         "hint": "建议添加合同正文、报价单、交付清单和内部规则",
     },
 }
@@ -39,365 +72,471 @@ def resource_path(relative: str) -> Path:
     return base / relative
 
 
-class MingJianApp(ctk.CTk):
+class ReviewWorker(QObject):
+    progress = Signal(int, int, str)
+    completed = Signal(object)
+    failed = Signal(str)
+
+    def __init__(self, scenario: str, paths: list[Path]) -> None:
+        super().__init__()
+        self.scenario = scenario
+        self.paths = paths
+
+    @Slot()
+    def run(self) -> None:
+        try:
+            result = review_paths(self.scenario, self.paths, self.progress.emit)
+            self.completed.emit(result)
+        except Exception as error:
+            self.failed.emit(str(error))
+
+
+class MetricCard(QFrame):
+    def __init__(self, label: str) -> None:
+        super().__init__()
+        self.setObjectName("metricCard")
+        self.setMinimumHeight(82)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(16, 13, 16, 12)
+        layout.setSpacing(2)
+        caption = QLabel(label)
+        caption.setObjectName("metricCaption")
+        self.value = QLabel("0")
+        self.value.setObjectName("metricValue")
+        layout.addWidget(caption)
+        layout.addWidget(self.value)
+
+
+class Panel(QFrame):
+    def __init__(self, title: str, meta: str) -> None:
+        super().__init__()
+        self.setObjectName("panel")
+        self.layout = QVBoxLayout(self)
+        self.layout.setContentsMargins(0, 0, 0, 0)
+        self.layout.setSpacing(0)
+        heading = QWidget()
+        heading.setFixedHeight(54)
+        heading_layout = QHBoxLayout(heading)
+        heading_layout.setContentsMargins(18, 0, 18, 0)
+        title_label = QLabel(title)
+        title_label.setObjectName("panelTitle")
+        self.meta_label = QLabel(meta)
+        self.meta_label.setObjectName("panelMeta")
+        heading_layout.addWidget(title_label)
+        heading_layout.addStretch()
+        heading_layout.addWidget(self.meta_label)
+        self.layout.addWidget(heading)
+
+
+class FileRow(QWidget):
+    remove_requested = Signal(Path)
+
+    def __init__(self, path: Path) -> None:
+        super().__init__()
+        self.path = path
+        self.setObjectName("listCard")
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(10, 9, 9, 9)
+        layout.setSpacing(10)
+        suffix = QLabel(path.suffix.upper().lstrip(".") or "FILE")
+        suffix.setObjectName("fileType")
+        suffix.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        suffix.setFixedSize(42, 34)
+        text = QVBoxLayout()
+        text.setSpacing(2)
+        name = QLabel(path.name)
+        name.setObjectName("fileName")
+        name.setToolTip(str(path))
+        size = QLabel(format_file_size(path))
+        size.setObjectName("fileSize")
+        text.addWidget(name)
+        text.addWidget(size)
+        remove = QPushButton("×")
+        remove.setObjectName("iconButton")
+        remove.setFixedSize(28, 28)
+        remove.setToolTip("移除材料")
+        remove.clicked.connect(lambda: self.remove_requested.emit(self.path))
+        layout.addWidget(suffix)
+        layout.addLayout(text, 1)
+        layout.addWidget(remove)
+
+
+class FindingRow(QWidget):
+    def __init__(self, finding: Finding, resolved: bool) -> None:
+        super().__init__()
+        self.setObjectName("findingCard")
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(12, 10, 12, 10)
+        layout.setSpacing(11)
+        label, color = SEVERITY_META[finding.severity]
+        badge = QLabel("已解决" if resolved else label)
+        badge.setProperty("role", "resolved" if resolved else finding.severity)
+        badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        badge.setFixedSize(54, 24)
+        texts = QVBoxLayout()
+        texts.setSpacing(4)
+        title = QLabel(finding.title)
+        title.setObjectName("findingTitleResolved" if resolved else "findingTitle")
+        title.setWordWrap(True)
+        source = finding.evidence[0].file if finding.evidence else "审查规则"
+        meta = QLabel(f"{finding.finding_id}  ·  {source}")
+        meta.setObjectName("findingMeta")
+        texts.addWidget(title)
+        texts.addWidget(meta)
+        layout.addWidget(badge, 0, Qt.AlignmentFlag.AlignTop)
+        layout.addLayout(texts, 1)
+        self.setStyleSheet(f"QLabel[role='{finding.severity}'] {{ color: {color}; }}")
+
+
+class MingJianWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
-        self.title("明鉴 · 材料审查工具")
-        screen_width = self.winfo_screenwidth()
-        screen_height = self.winfo_screenheight()
-        window_width = min(1380, max(1120, screen_width - 64))
-        window_height = min(860, max(700, screen_height - 80))
-        position_x = max(0, (screen_width - window_width) // 2)
-        position_y = max(0, (screen_height - window_height) // 2)
-        self.geometry(f"{window_width}x{window_height}+{position_x}+{position_y}")
-        self.minsize(min(1120, window_width), min(700, window_height))
-        self.configure(fg_color=COLORS["app"])
+        self.setWindowTitle("明鉴 · 材料审查工具")
         icon_path = resource_path("assets/mingjian.ico")
         if icon_path.exists():
-            self.iconbitmap(str(icon_path))
+            self.setWindowIcon(QIcon(str(icon_path)))
 
         self.scenario = "competition"
         self.paths: list[Path] = []
         self.result: ReviewResult | None = None
         self.selected_finding: Finding | None = None
         self.resolved_ids: set[str] = set()
-        self.scenario_buttons: dict[str, ctk.CTkButton] = {}
+        self.thread: QThread | None = None
+        self.worker: ReviewWorker | None = None
 
-        self.grid_columnconfigure(1, weight=1)
-        self.grid_rowconfigure(0, weight=1)
-        self._build_sidebar()
-        self._build_main()
-        self._render_files()
+        screen = QApplication.primaryScreen().availableGeometry()
+        width = min(1500, max(1180, int(screen.width() * 0.9)))
+        height = min(920, max(720, int(screen.height() * 0.88)))
+        self.resize(width, height)
+        self.setMinimumSize(1120, 700)
+        self.move(screen.center() - self.rect().center())
+
+        self.setStyleSheet(APP_STYLE)
+        self._build_ui()
         self._set_scenario("competition")
 
-    def _build_sidebar(self) -> None:
-        sidebar = ctk.CTkFrame(self, width=238, corner_radius=0, fg_color=COLORS["sidebar"])
-        sidebar.grid(row=0, column=0, sticky="nsew")
-        sidebar.grid_propagate(False)
-        sidebar.grid_rowconfigure(8, weight=1)
+    def _build_ui(self) -> None:
+        root = QWidget()
+        root.setObjectName("root")
+        root_layout = QHBoxLayout(root)
+        root_layout.setContentsMargins(0, 0, 0, 0)
+        root_layout.setSpacing(0)
+        root_layout.addWidget(self._build_sidebar())
+        root_layout.addWidget(self._build_workspace(), 1)
+        self.setCentralWidget(root)
 
-        brand = ctk.CTkFrame(sidebar, fg_color="transparent")
-        brand.grid(row=0, column=0, padx=24, pady=(26, 42), sticky="ew")
-        brand.grid_columnconfigure(1, weight=1)
-        ctk.CTkLabel(
-            brand, text="明", width=38, height=38, corner_radius=9, fg_color=COLORS["accent"],
-            text_color="#062018", font=("Microsoft YaHei UI", 18, "bold"),
-        ).grid(row=0, column=0, rowspan=2, padx=(0, 12))
-        ctk.CTkLabel(
-            brand, text="明鉴", anchor="w", text_color=COLORS["text"],
-            font=("Microsoft YaHei UI", 20, "bold"),
-        ).grid(row=0, column=1, sticky="sw")
-        ctk.CTkLabel(
-            brand, text="MATERIAL REVIEW", anchor="w", text_color=COLORS["muted"], font=("Cascadia Mono", 9),
-        ).grid(row=1, column=1, sticky="nw")
+    def _build_sidebar(self) -> QWidget:
+        sidebar = QFrame()
+        sidebar.setObjectName("sidebar")
+        sidebar.setFixedWidth(232)
+        layout = QVBoxLayout(sidebar)
+        layout.setContentsMargins(18, 24, 18, 18)
+        layout.setSpacing(6)
 
-        ctk.CTkLabel(
-            sidebar, text="审查场景", anchor="w", text_color="#66717D",
-            font=("Microsoft YaHei UI", 11, "bold"),
-        ).grid(row=1, column=0, padx=25, pady=(0, 10), sticky="ew")
-        for row, (scenario_id, label) in enumerate([
-            ("competition", "竞赛材料审查"), ("contract", "合同条款审查"),
-        ], start=2):
-            button = ctk.CTkButton(
-                sidebar, text=label, height=44, corner_radius=8, anchor="w", border_spacing=16,
-                font=("Microsoft YaHei UI", 13, "bold"), fg_color="transparent",
-                hover_color=COLORS["panel_alt"], text_color="#B4BDC6",
-                command=lambda value=scenario_id: self._set_scenario(value),
-            )
-            button.grid(row=row, column=0, padx=12, pady=3, sticky="ew")
-            self.scenario_buttons[scenario_id] = button
+        brand = QHBoxLayout()
+        brand.setSpacing(11)
+        mark = QLabel("明")
+        mark.setObjectName("brandMark")
+        mark.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        mark.setFixedSize(40, 40)
+        brand_text = QVBoxLayout()
+        brand_text.setSpacing(0)
+        name = QLabel("明鉴")
+        name.setObjectName("brandName")
+        english = QLabel("MATERIAL REVIEW")
+        english.setObjectName("brandEnglish")
+        brand_text.addWidget(name)
+        brand_text.addWidget(english)
+        brand.addWidget(mark)
+        brand.addLayout(brand_text, 1)
+        layout.addLayout(brand)
+        layout.addSpacing(42)
 
-        ctk.CTkLabel(
-            sidebar, text="更多能力", anchor="w", text_color="#66717D",
-            font=("Microsoft YaHei UI", 11, "bold"),
-        ).grid(row=4, column=0, padx=25, pady=(30, 10), sticky="ew")
-        ctk.CTkButton(
-            sidebar, text="科研材料审查   即将推出", height=42, corner_radius=8, anchor="w",
-            border_spacing=16, font=("Microsoft YaHei UI", 12), state="disabled",
-            fg_color="transparent", text_color_disabled="#59636E",
-        ).grid(row=5, column=0, padx=12, pady=3, sticky="ew")
+        section = QLabel("审查场景")
+        section.setObjectName("sectionLabel")
+        layout.addWidget(section)
+        self.nav_group = QButtonGroup(self)
+        self.nav_group.setExclusive(True)
+        self.nav_buttons: dict[str, QPushButton] = {}
+        for scenario_id, info in SCENARIOS.items():
+            button = QPushButton(info["nav"])
+            button.setObjectName("navButton")
+            button.setCheckable(True)
+            button.setMinimumHeight(44)
+            button.clicked.connect(lambda checked=False, value=scenario_id: self._set_scenario(value))
+            self.nav_group.addButton(button)
+            self.nav_buttons[scenario_id] = button
+            layout.addWidget(button)
 
-        privacy = ctk.CTkFrame(sidebar, fg_color="#0D2B23", corner_radius=10)
-        privacy.grid(row=9, column=0, padx=16, pady=(12, 16), sticky="sew")
-        ctk.CTkLabel(
-            privacy, text="本地处理", anchor="w", text_color=COLORS["accent"],
-            font=("Microsoft YaHei UI", 12, "bold"),
-        ).pack(fill="x", padx=16, pady=(14, 4))
-        ctk.CTkLabel(
-            privacy, text="材料只在本机解析\n无需账户与网络连接", justify="left", anchor="w",
-            text_color="#A9BFB8", font=("Microsoft YaHei UI", 11),
-        ).pack(fill="x", padx=16, pady=(0, 14))
-        ctk.CTkLabel(
-            sidebar, text="v0.3 · Native Desktop", text_color="#56606B", font=("Cascadia Mono", 9),
-        ).grid(row=10, column=0, padx=24, pady=(0, 20), sticky="w")
+        layout.addSpacing(24)
+        more = QLabel("更多能力")
+        more.setObjectName("sectionLabel")
+        layout.addWidget(more)
+        upcoming = QPushButton("科研材料审查    即将推出")
+        upcoming.setObjectName("navButton")
+        upcoming.setEnabled(False)
+        upcoming.setMinimumHeight(44)
+        layout.addWidget(upcoming)
+        layout.addStretch()
 
-    def _build_main(self) -> None:
-        main = ctk.CTkFrame(self, corner_radius=0, fg_color=COLORS["app"])
-        main.grid(row=0, column=1, sticky="nsew")
-        main.grid_columnconfigure(0, weight=1)
-        main.grid_rowconfigure(3, weight=1)
+        privacy = QFrame()
+        privacy.setObjectName("privacyCard")
+        privacy_layout = QVBoxLayout(privacy)
+        privacy_layout.setContentsMargins(15, 13, 15, 13)
+        privacy_layout.setSpacing(4)
+        privacy_title = QLabel("本地处理")
+        privacy_title.setObjectName("privacyTitle")
+        privacy_body = QLabel("材料只在本机解析\n无需账户与网络连接")
+        privacy_body.setObjectName("privacyBody")
+        privacy_layout.addWidget(privacy_title)
+        privacy_layout.addWidget(privacy_body)
+        layout.addWidget(privacy)
+        version = QLabel("v0.4  ·  Qt Desktop")
+        version.setObjectName("version")
+        layout.addWidget(version)
+        return sidebar
 
-        header = ctk.CTkFrame(main, height=104, corner_radius=0, fg_color="transparent")
-        header.grid(row=0, column=0, padx=30, pady=(24, 10), sticky="ew")
-        header.grid_columnconfigure(0, weight=1)
-        self.title_label = ctk.CTkLabel(
-            header, text="", anchor="w", text_color=COLORS["text"],
-            font=("Microsoft YaHei UI", 28, "bold"),
-        )
-        self.title_label.grid(row=0, column=0, sticky="w")
-        self.subtitle_label = ctk.CTkLabel(
-            header, text="", anchor="w", text_color=COLORS["muted"], font=("Microsoft YaHei UI", 12),
-        )
-        self.subtitle_label.grid(row=1, column=0, pady=(5, 0), sticky="w")
-        self.add_button = ctk.CTkButton(
-            header, text="＋ 添加材料", width=118, height=42, corner_radius=8,
-            fg_color=COLORS["panel_alt"], hover_color=COLORS["border"], border_width=1,
-            border_color=COLORS["border"], text_color=COLORS["text"],
-            font=("Microsoft YaHei UI", 12, "bold"), command=self._choose_files,
-        )
-        self.add_button.grid(row=0, column=1, rowspan=2, padx=(12, 10))
-        self.review_button = ctk.CTkButton(
-            header, text="开始审查", width=118, height=42, corner_radius=8,
-            fg_color=COLORS["accent"], hover_color=COLORS["accent_hover"], text_color="#071B14",
-            font=("Microsoft YaHei UI", 12, "bold"), command=self._start_review,
-        )
-        self.review_button.grid(row=0, column=2, rowspan=2)
+    def _build_workspace(self) -> QWidget:
+        workspace = QWidget()
+        layout = QVBoxLayout(workspace)
+        layout.setContentsMargins(28, 24, 28, 15)
+        layout.setSpacing(14)
 
-        metrics = ctk.CTkFrame(main, fg_color="transparent")
-        metrics.grid(row=1, column=0, padx=30, pady=(4, 18), sticky="ew")
-        for index in range(4):
-            metrics.grid_columnconfigure(index, weight=1, uniform="metric")
-        self.metric_values: list[ctk.CTkLabel] = []
-        for index, label in enumerate(["已添加材料", "发现问题", "高风险项", "整改进度"]):
-            card = ctk.CTkFrame(
-                metrics, height=88, fg_color=COLORS["panel"], corner_radius=10,
-                border_width=1, border_color=COLORS["border"],
-            )
-            card.grid(row=0, column=index, padx=(0 if index == 0 else 6, 0 if index == 3 else 6), sticky="ew")
-            card.grid_propagate(False)
-            ctk.CTkLabel(card, text=label, anchor="w", text_color=COLORS["muted"], font=("Microsoft YaHei UI", 11)).pack(fill="x", padx=16, pady=(13, 2))
-            value = ctk.CTkLabel(card, text="0", anchor="w", text_color=COLORS["text"], font=("Cascadia Mono", 23, "bold"))
-            value.pack(fill="x", padx=16)
-            self.metric_values.append(value)
+        header = QHBoxLayout()
+        header_text = QVBoxLayout()
+        header_text.setSpacing(3)
+        self.title_label = QLabel()
+        self.title_label.setObjectName("pageTitle")
+        self.subtitle_label = QLabel()
+        self.subtitle_label.setObjectName("pageSubtitle")
+        header_text.addWidget(self.title_label)
+        header_text.addWidget(self.subtitle_label)
+        header.addLayout(header_text, 1)
+        self.add_button = QPushButton("＋  添加材料")
+        self.add_button.setObjectName("secondaryButton")
+        self.add_button.setMinimumSize(126, 42)
+        self.add_button.clicked.connect(self._choose_files)
+        self.review_button = QPushButton("开始审查")
+        self.review_button.setObjectName("primaryButton")
+        self.review_button.setMinimumSize(126, 42)
+        self.review_button.clicked.connect(self._start_review)
+        header.addWidget(self.add_button)
+        header.addWidget(self.review_button)
+        layout.addLayout(header)
 
-        self.progress = ctk.CTkProgressBar(
-            main, height=3, corner_radius=0, progress_color=COLORS["accent"], fg_color=COLORS["border"],
-        )
-        self.progress.grid(row=2, column=0, padx=30, sticky="ew")
-        self.progress.set(0)
+        metrics = QHBoxLayout()
+        metrics.setSpacing(10)
+        self.metric_cards = [MetricCard(label) for label in ["已添加材料", "待处理问题", "高风险项", "整改进度"]]
+        for card in self.metric_cards:
+            metrics.addWidget(card, 1)
+        layout.addLayout(metrics)
 
-        workspace = ctk.CTkFrame(main, fg_color="transparent")
-        workspace.grid(row=3, column=0, padx=30, pady=(15, 12), sticky="nsew")
-        workspace.grid_rowconfigure(0, weight=1)
-        workspace.grid_columnconfigure(0, weight=0, minsize=242)
-        workspace.grid_columnconfigure(1, weight=0, minsize=330)
-        workspace.grid_columnconfigure(2, weight=1, minsize=410)
+        self.progress_line = QFrame()
+        self.progress_line.setObjectName("progressLine")
+        self.progress_line.setFixedHeight(3)
+        layout.addWidget(self.progress_line)
 
-        self.file_panel = self._panel(workspace, 0, "材料清单", "0 个文件")
-        self.file_list = ctk.CTkScrollableFrame(self.file_panel, fg_color="transparent", scrollbar_button_color=COLORS["border"])
-        self.file_list.pack(fill="both", expand=True, padx=8, pady=(2, 10))
-        self.finding_panel = self._panel(workspace, 1, "审查结果", "等待审查")
-        self.finding_list = ctk.CTkScrollableFrame(self.finding_panel, fg_color="transparent", scrollbar_button_color=COLORS["border"])
-        self.finding_list.pack(fill="both", expand=True, padx=8, pady=(2, 10))
-        self.detail_panel = self._panel(workspace, 2, "问题详情", "证据可追溯")
-        self.detail_content = ctk.CTkScrollableFrame(self.detail_panel, fg_color="transparent", scrollbar_button_color=COLORS["border"])
-        self.detail_content.pack(fill="both", expand=True, padx=18, pady=(4, 14))
+        splitter = QSplitter(Qt.Orientation.Horizontal)
+        splitter.setObjectName("workspaceSplitter")
+        splitter.setChildrenCollapsible(False)
+        self.file_panel = Panel("材料清单", "0 个文件")
+        self.file_list = QListWidget()
+        self.file_list.setObjectName("fileList")
+        self.file_list.setSpacing(6)
+        self.file_panel.layout.addWidget(self.file_list, 1)
+        self.finding_panel = Panel("审查结果", "等待审查")
+        self.finding_list = QListWidget()
+        self.finding_list.setObjectName("findingList")
+        self.finding_list.setSpacing(6)
+        self.finding_list.currentItemChanged.connect(self._on_current_finding_changed)
+        self.finding_panel.layout.addWidget(self.finding_list, 1)
+        self.detail_panel = Panel("问题详情", "证据可追溯")
+        self.detail_scroll = QScrollArea()
+        self.detail_scroll.setWidgetResizable(True)
+        self.detail_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self.detail_scroll.setObjectName("detailScroll")
+        self.detail_panel.layout.addWidget(self.detail_scroll, 1)
+        splitter.addWidget(self.file_panel)
+        splitter.addWidget(self.finding_panel)
+        splitter.addWidget(self.detail_panel)
+        splitter.setStretchFactor(0, 22)
+        splitter.setStretchFactor(1, 29)
+        splitter.setStretchFactor(2, 49)
+        splitter.setSizes([250, 330, 570])
+        layout.addWidget(splitter, 1)
 
-        footer = ctk.CTkFrame(main, height=32, fg_color="transparent")
-        footer.grid(row=4, column=0, padx=30, pady=(0, 13), sticky="ew")
-        footer.grid_columnconfigure(0, weight=1)
-        self.status_label = ctk.CTkLabel(footer, text="就绪", anchor="w", text_color=COLORS["muted"], font=("Microsoft YaHei UI", 10))
-        self.status_label.grid(row=0, column=0, sticky="w")
-        self.export_button = ctk.CTkButton(
-            footer, text="导出审查报告", width=108, height=28, corner_radius=6, fg_color="transparent",
-            hover_color=COLORS["panel_alt"], border_width=1, border_color=COLORS["border"],
-            text_color=COLORS["muted"], font=("Microsoft YaHei UI", 10),
-            command=self._export_report, state="disabled",
-        )
-        self.export_button.grid(row=0, column=1, sticky="e")
-
-    def _panel(self, parent: ctk.CTkFrame, column: int, title: str, meta: str) -> ctk.CTkFrame:
-        panel = ctk.CTkFrame(
-            parent, fg_color=COLORS["panel"], corner_radius=10, border_width=1, border_color=COLORS["border"],
-        )
-        panel.grid(row=0, column=column, padx=(0 if column == 0 else 6, 0 if column == 2 else 6), sticky="nsew")
-        heading = ctk.CTkFrame(panel, height=54, fg_color="transparent")
-        heading.pack(fill="x", padx=16, pady=(4, 0))
-        heading.pack_propagate(False)
-        ctk.CTkLabel(heading, text=title, anchor="w", text_color=COLORS["text"], font=("Microsoft YaHei UI", 13, "bold")).pack(side="left", fill="y")
-        meta_label = ctk.CTkLabel(heading, text=meta, anchor="e", text_color=COLORS["muted"], font=("Microsoft YaHei UI", 10))
-        meta_label.pack(side="right", fill="y")
-        panel.meta_label = meta_label  # type: ignore[attr-defined]
-        return panel
+        footer = QHBoxLayout()
+        self.status_label = QLabel("就绪")
+        self.status_label.setObjectName("statusLabel")
+        self.export_button = QPushButton("导出审查报告")
+        self.export_button.setObjectName("quietButton")
+        self.export_button.setEnabled(False)
+        self.export_button.clicked.connect(self._export_report)
+        footer.addWidget(self.status_label, 1)
+        footer.addWidget(self.export_button)
+        layout.addLayout(footer)
+        return workspace
 
     def _set_scenario(self, scenario: str) -> None:
         self.scenario = scenario
         info = SCENARIOS[scenario]
-        self.title_label.configure(text=info["title"])
-        self.subtitle_label.configure(text=info["subtitle"])
-        for scenario_id, button in self.scenario_buttons.items():
-            if scenario_id == scenario:
-                button.configure(fg_color=COLORS["accent_dark"], text_color=COLORS["accent"])
-            else:
-                button.configure(fg_color="transparent", text_color="#B4BDC6")
+        self.nav_buttons[scenario].setChecked(True)
+        self.title_label.setText(info["title"])
+        self.subtitle_label.setText(info["subtitle"])
         self.result = None
         self.selected_finding = None
         self.resolved_ids.clear()
+        self.export_button.setEnabled(False)
         self._render_findings()
         self._render_detail()
         self._update_metrics()
-        self.status_label.configure(text=info["hint"])
+        self.status_label.setText(info["hint"])
 
     def _choose_files(self) -> None:
-        selected = filedialog.askopenfilenames(
-            title="选择需要审查的材料",
-            filetypes=[("支持的材料", "*.pdf *.docx *.xlsx *.txt *.md *.csv *.json"), ("所有文件", "*.*")],
+        files, _ = QFileDialog.getOpenFileNames(
+            self,
+            "选择需要审查的材料",
+            "",
+            "支持的材料 (*.pdf *.docx *.xlsx *.txt *.md *.csv *.json);;所有文件 (*.*)",
         )
-        if not selected:
+        if not files:
             return
         known = {str(path).lower() for path in self.paths}
         rejected: list[str] = []
-        for item in selected:
+        for item in files:
             path = Path(item)
             if path.suffix.lower() not in SUPPORTED_SUFFIXES:
                 rejected.append(path.name)
             elif str(path).lower() not in known:
                 self.paths.append(path)
                 known.add(str(path).lower())
-        self._render_files()
-        self._update_metrics()
-        self.status_label.configure(text=f"已添加 {len(self.paths)} 个文件，可以开始审查")
-        if rejected:
-            messagebox.showwarning("部分文件未添加", "暂不支持：\n" + "\n".join(rejected))
-
-    def _remove_file(self, path: Path) -> None:
-        self.paths = [item for item in self.paths if item != path]
         self.result = None
         self.resolved_ids.clear()
         self._render_files()
         self._render_findings()
         self._render_detail()
         self._update_metrics()
+        self.status_label.setText(f"已添加 {len(self.paths)} 个文件，可以开始审查")
+        if rejected:
+            QMessageBox.warning(self, "部分文件未添加", "暂不支持：\n" + "\n".join(rejected))
+
+    def _remove_file(self, path: Path) -> None:
+        self.paths = [item for item in self.paths if item != path]
+        self.result = None
+        self.selected_finding = None
+        self.resolved_ids.clear()
+        self.export_button.setEnabled(False)
+        self._render_files()
+        self._render_findings()
+        self._render_detail()
+        self._update_metrics()
 
     def _render_files(self) -> None:
-        for child in self.file_list.winfo_children():
-            child.destroy()
-        self.file_panel.meta_label.configure(text=f"{len(self.paths)} 个文件")  # type: ignore[attr-defined]
+        self.file_list.clear()
+        self.file_panel.meta_label.setText(f"{len(self.paths)} 个文件")
         if not self.paths:
-            ctk.CTkLabel(
-                self.file_list, text="还没有材料\n\n点击右上角“添加材料”", justify="center",
-                text_color="#68737E", font=("Microsoft YaHei UI", 11),
-            ).pack(pady=70)
+            self._add_placeholder(self.file_list, "尚未添加材料\n\n点击右上角“添加材料”")
             return
         for path in self.paths:
-            row = ctk.CTkFrame(self.file_list, fg_color=COLORS["panel_alt"], corner_radius=8)
-            row.pack(fill="x", pady=4)
-            row.grid_columnconfigure(1, weight=1)
-            ext = path.suffix.upper().lstrip(".") or "FILE"
-            ctk.CTkLabel(
-                row, text=ext, width=42, height=30, corner_radius=6, fg_color="#202A33",
-                text_color=COLORS["accent"], font=("Cascadia Mono", 9, "bold"),
-            ).grid(row=0, column=0, rowspan=2, padx=(10, 8), pady=10)
-            ctk.CTkLabel(row, text=path.name, anchor="w", text_color=COLORS["text"], font=("Microsoft YaHei UI", 11, "bold")).grid(row=0, column=1, pady=(10, 0), sticky="ew")
-            ctk.CTkLabel(row, text=self._file_size(path), anchor="w", text_color=COLORS["muted"], font=("Cascadia Mono", 9)).grid(row=1, column=1, pady=(0, 10), sticky="ew")
-            ctk.CTkButton(
-                row, text="×", width=28, height=28, corner_radius=6, fg_color="transparent",
-                hover_color="#342126", text_color="#8C969F", font=("Segoe UI", 16),
-                command=lambda value=path: self._remove_file(value),
-            ).grid(row=0, column=2, rowspan=2, padx=8)
+            item = QListWidgetItem()
+            item.setSizeHint(QSize(210, 64))
+            row = FileRow(path)
+            row.remove_requested.connect(self._remove_file)
+            self.file_list.addItem(item)
+            self.file_list.setItemWidget(item, row)
 
     def _render_findings(self) -> None:
-        for child in self.finding_list.winfo_children():
-            child.destroy()
+        self.finding_list.clear()
         if not self.result:
-            self.finding_panel.meta_label.configure(text="等待审查")  # type: ignore[attr-defined]
-            ctk.CTkLabel(
-                self.finding_list, text="添加材料并运行审查后，\n问题会按风险等级排列在这里。",
-                justify="center", text_color="#68737E", font=("Microsoft YaHei UI", 11),
-            ).pack(pady=70)
+            self.finding_panel.meta_label.setText("等待审查")
+            self._add_placeholder(self.finding_list, "运行审查后，问题会按风险等级排列在这里。")
             return
-        self.finding_panel.meta_label.configure(text=f"{len(self.result.findings)} 项")  # type: ignore[attr-defined]
+        self.finding_panel.meta_label.setText(f"{len(self.result.findings)} 项")
         for finding in self.result.findings:
-            selected = self.selected_finding and self.selected_finding.finding_id == finding.finding_id
-            resolved = finding.finding_id in self.resolved_ids
-            label, color = SEVERITY_META[finding.severity]
-            row = ctk.CTkButton(
-                self.finding_list, text="", height=86, corner_radius=8,
-                fg_color=COLORS["accent_dark"] if selected else COLORS["panel_alt"],
-                hover_color="#1E2831", command=lambda value=finding: self._select_finding(value),
-            )
-            row.pack(fill="x", pady=4)
-            row.grid_columnconfigure(1, weight=1)
-            ctk.CTkLabel(
-                row, text="✓" if resolved else label, width=54, height=24, corner_radius=5,
-                fg_color="#173129" if resolved else "#252A30", text_color=COLORS["accent"] if resolved else color,
-                font=("Microsoft YaHei UI", 9, "bold"),
-            ).grid(row=0, column=0, padx=(11, 8), pady=(14, 4), sticky="nw")
-            ctk.CTkLabel(
-                row, text=finding.title, anchor="w", justify="left", wraplength=215,
-                text_color="#7D8985" if resolved else COLORS["text"], font=("Microsoft YaHei UI", 11, "bold"),
-            ).grid(row=0, column=1, padx=(0, 10), pady=(13, 3), sticky="ew")
-            source = finding.evidence[0].file if finding.evidence else "审查规则"
-            ctk.CTkLabel(
-                row, text=f"{finding.finding_id} · {source}", anchor="w", text_color=COLORS["muted"],
-                font=("Cascadia Mono", 8),
-            ).grid(row=1, column=1, padx=(0, 10), pady=(0, 12), sticky="ew")
+            item = QListWidgetItem()
+            item.setData(Qt.ItemDataRole.UserRole, finding.finding_id)
+            item.setSizeHint(QSize(280, 78))
+            row = FindingRow(finding, finding.finding_id in self.resolved_ids)
+            self.finding_list.addItem(item)
+            self.finding_list.setItemWidget(item, row)
+            if self.selected_finding and finding.finding_id == self.selected_finding.finding_id:
+                self.finding_list.setCurrentItem(item)
 
-    def _select_finding(self, finding: Finding) -> None:
-        self.selected_finding = finding
-        self._render_findings()
+    def _on_current_finding_changed(self, item: QListWidgetItem | None, previous: QListWidgetItem | None) -> None:
+        del previous
+        if not self.result or item is None:
+            return
+        finding_id = item.data(Qt.ItemDataRole.UserRole)
+        self.selected_finding = next((item for item in self.result.findings if item.finding_id == finding_id), None)
         self._render_detail()
 
     def _render_detail(self) -> None:
-        for child in self.detail_content.winfo_children():
-            child.destroy()
+        content = QWidget()
+        content.setObjectName("detailContent")
+        layout = QVBoxLayout(content)
+        layout.setContentsMargins(22, 12, 22, 22)
+        layout.setSpacing(13)
         finding = self.selected_finding
         if not finding:
-            ctk.CTkLabel(
-                self.detail_content, text="选择一条审查问题\n查看结论、证据和整改建议",
-                justify="center", text_color="#68737E", font=("Microsoft YaHei UI", 12),
-            ).pack(pady=90)
+            layout.addStretch()
+            empty = QLabel("选择一条审查问题\n查看结论、证据和整改建议")
+            empty.setObjectName("emptyState")
+            empty.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            layout.addWidget(empty)
+            layout.addStretch()
+            self.detail_scroll.setWidget(content)
             return
+
         severity_label, severity_color = SEVERITY_META[finding.severity]
-        ctk.CTkLabel(
-            self.detail_content, text=severity_label, width=72, height=27, corner_radius=6,
-            fg_color="#252A30", text_color=severity_color, font=("Microsoft YaHei UI", 10, "bold"),
-        ).pack(anchor="w", pady=(8, 14))
-        ctk.CTkLabel(
-            self.detail_content, text=finding.title, anchor="w", justify="left", wraplength=520,
-            text_color=COLORS["text"], font=("Microsoft YaHei UI", 21, "bold"),
-        ).pack(fill="x", pady=(0, 12))
-        ctk.CTkLabel(
-            self.detail_content, text=finding.detail, anchor="w", justify="left", wraplength=520,
-            text_color="#B6BFC8", font=("Microsoft YaHei UI", 12),
-        ).pack(fill="x", pady=(0, 22))
+        badge = QLabel(severity_label)
+        badge.setObjectName("detailBadge")
+        badge.setStyleSheet(f"color: {severity_color};")
+        badge.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        badge.setFixedSize(72, 27)
+        title = QLabel(finding.title)
+        title.setObjectName("detailTitle")
+        title.setWordWrap(True)
+        detail = QLabel(finding.detail)
+        detail.setObjectName("detailBody")
+        detail.setWordWrap(True)
+        layout.addWidget(badge, 0, Qt.AlignmentFlag.AlignLeft)
+        layout.addWidget(title)
+        layout.addWidget(detail)
+
         evidence = finding.evidence[0] if finding.evidence else None
-        evidence_card = ctk.CTkFrame(
-            self.detail_content, fg_color="#10151B", corner_radius=8, border_width=1, border_color=COLORS["border"],
-        )
-        evidence_card.pack(fill="x", pady=(0, 14))
-        ctk.CTkLabel(evidence_card, text="原文证据", anchor="w", text_color=COLORS["accent"], font=("Microsoft YaHei UI", 10, "bold")).pack(fill="x", padx=16, pady=(14, 8))
-        ctk.CTkLabel(
-            evidence_card, text=f'“{evidence.excerpt if evidence else "暂无原文证据"}”', anchor="w",
-            justify="left", wraplength=490, text_color="#D8DEE3", font=("Microsoft YaHei UI", 12),
-        ).pack(fill="x", padx=16)
-        ctk.CTkLabel(
-            evidence_card, text=f"{evidence.file if evidence else '审查规则'}  ·  第 {evidence.page if evidence else 1} 页",
-            anchor="w", text_color=COLORS["muted"], font=("Cascadia Mono", 9),
-        ).pack(fill="x", padx=16, pady=(9, 14))
-        ctk.CTkLabel(self.detail_content, text="整改建议", anchor="w", text_color=COLORS["muted"], font=("Microsoft YaHei UI", 10, "bold")).pack(fill="x", pady=(4, 7))
-        ctk.CTkLabel(
-            self.detail_content, text=finding.suggestion, anchor="w", justify="left", wraplength=520,
-            text_color=COLORS["text"], font=("Microsoft YaHei UI", 12),
-        ).pack(fill="x", pady=(0, 22))
+        evidence_card = QFrame()
+        evidence_card.setObjectName("evidenceCard")
+        evidence_layout = QVBoxLayout(evidence_card)
+        evidence_layout.setContentsMargins(17, 15, 17, 15)
+        evidence_layout.setSpacing(9)
+        evidence_label = QLabel("原文证据")
+        evidence_label.setObjectName("evidenceLabel")
+        excerpt = QLabel(f'“{evidence.excerpt if evidence else "暂无原文证据"}”')
+        excerpt.setObjectName("evidenceText")
+        excerpt.setWordWrap(True)
+        source = QLabel(f"{evidence.file if evidence else '审查规则'}  ·  第 {evidence.page if evidence else 1} 页")
+        source.setObjectName("evidenceSource")
+        evidence_layout.addWidget(evidence_label)
+        evidence_layout.addWidget(excerpt)
+        evidence_layout.addWidget(source)
+        layout.addWidget(evidence_card)
+
+        suggestion_label = QLabel("整改建议")
+        suggestion_label.setObjectName("detailSectionLabel")
+        suggestion = QLabel(finding.suggestion)
+        suggestion.setObjectName("detailBodyStrong")
+        suggestion.setWordWrap(True)
+        layout.addWidget(suggestion_label)
+        layout.addWidget(suggestion)
+        layout.addSpacing(4)
         resolved = finding.finding_id in self.resolved_ids
-        ctk.CTkButton(
-            self.detail_content, text="恢复为待处理" if resolved else "标记为已解决", height=40,
-            corner_radius=8, fg_color=COLORS["panel_alt"] if resolved else COLORS["accent"],
-            hover_color=COLORS["border"] if resolved else COLORS["accent_hover"],
-            text_color=COLORS["text"] if resolved else "#071B14",
-            font=("Microsoft YaHei UI", 11, "bold"), command=self._toggle_resolved,
-        ).pack(fill="x")
+        action = QPushButton("恢复为待处理" if resolved else "标记为已解决")
+        action.setObjectName("secondaryButton" if resolved else "primaryButton")
+        action.setMinimumHeight(40)
+        action.clicked.connect(self._toggle_resolved)
+        layout.addWidget(action)
+        layout.addStretch()
+        self.detail_scroll.setWidget(content)
 
     def _toggle_resolved(self) -> None:
         if not self.selected_finding:
@@ -413,45 +552,65 @@ class MingJianApp(ctk.CTk):
 
     def _start_review(self) -> None:
         if not self.paths:
-            messagebox.showinfo("添加材料", "请先添加需要审查的文件。")
+            QMessageBox.information(self, "添加材料", "请先添加需要审查的文件。")
             return
-        self.review_button.configure(state="disabled", text="正在审查…")
-        self.add_button.configure(state="disabled")
-        self.progress.set(0.04)
-        self.status_label.configure(text="正在准备解析材料")
-        threading.Thread(target=self._review_worker, daemon=True).start()
+        self.review_button.setEnabled(False)
+        self.review_button.setText("正在审查…")
+        self.add_button.setEnabled(False)
+        self.progress_line.setProperty("running", True)
+        self.progress_line.style().unpolish(self.progress_line)
+        self.progress_line.style().polish(self.progress_line)
+        self.status_label.setText("正在准备解析材料")
 
-    def _review_worker(self) -> None:
-        try:
-            result = review_paths(self.scenario, list(self.paths), self._on_worker_progress)
-            self.after(0, lambda: self._finish_review(result))
-        except Exception as error:
-            self.after(0, lambda message=str(error): self._fail_review(message))
+        self.thread = QThread(self)
+        self.worker = ReviewWorker(self.scenario, list(self.paths))
+        self.worker.moveToThread(self.thread)
+        self.thread.started.connect(self.worker.run)
+        self.worker.progress.connect(self._on_review_progress)
+        self.worker.completed.connect(self._finish_review)
+        self.worker.failed.connect(self._fail_review)
+        self.worker.completed.connect(self.thread.quit)
+        self.worker.failed.connect(self.thread.quit)
+        self.thread.finished.connect(self.worker.deleteLater)
+        self.thread.finished.connect(self.thread.deleteLater)
+        self.thread.finished.connect(self._cleanup_thread)
+        self.thread.start()
 
-    def _on_worker_progress(self, current: int, total: int, message: str) -> None:
-        value = 0.08 + (current / max(total, 1)) * 0.82
-        self.after(0, lambda: (self.progress.set(value), self.status_label.configure(text=message)))
+    @Slot(int, int, str)
+    def _on_review_progress(self, current: int, total: int, message: str) -> None:
+        self.status_label.setText(f"{message}  ·  {current}/{total}")
 
+    @Slot(object)
     def _finish_review(self, result: ReviewResult) -> None:
         self.result = result
         self.resolved_ids.clear()
         self.selected_finding = result.findings[0] if result.findings else None
-        self.progress.set(1)
-        self.review_button.configure(state="normal", text="重新审查")
-        self.add_button.configure(state="normal")
-        self.export_button.configure(state="normal")
+        self._reset_review_controls()
+        self.export_button.setEnabled(True)
         characters = sum(item.characters for item in result.files)
-        self.status_label.configure(text=f"审查完成 · 解析 {len(result.files)} 个文件，共 {characters:,} 个字符")
+        self.status_label.setText(f"审查完成  ·  {len(result.files)} 个文件  ·  {characters:,} 个字符")
         self._render_findings()
         self._render_detail()
         self._update_metrics()
 
+    @Slot(str)
     def _fail_review(self, detail: str) -> None:
-        self.progress.set(0)
-        self.review_button.configure(state="normal", text="开始审查")
-        self.add_button.configure(state="normal")
-        self.status_label.configure(text="审查失败，请检查文件后重试")
-        messagebox.showerror("审查失败", detail)
+        self._reset_review_controls()
+        self.status_label.setText("审查失败，请检查文件后重试")
+        QMessageBox.critical(self, "审查失败", detail)
+
+    def _reset_review_controls(self) -> None:
+        self.review_button.setEnabled(True)
+        self.review_button.setText("重新审查" if self.result else "开始审查")
+        self.add_button.setEnabled(True)
+        self.progress_line.setProperty("running", False)
+        self.progress_line.style().unpolish(self.progress_line)
+        self.progress_line.style().polish(self.progress_line)
+
+    @Slot()
+    def _cleanup_thread(self) -> None:
+        self.worker = None
+        self.thread = None
 
     def _update_metrics(self) -> None:
         findings = self.result.findings if self.result else []
@@ -459,46 +618,141 @@ class MingJianApp(ctk.CTk):
         high_risk = [item for item in open_findings if item.severity in {"blocking", "high"}]
         completion = round((len(self.resolved_ids) / len(findings)) * 100) if findings else 0
         values = [str(len(self.paths)), str(len(open_findings)), str(len(high_risk)), f"{completion}%"]
-        for label, value in zip(self.metric_values, values):
-            label.configure(text=value)
-        self.metric_values[2].configure(text_color=COLORS["danger"] if high_risk else COLORS["text"])
+        for card, value in zip(self.metric_cards, values):
+            card.value.setText(value)
+        self.metric_cards[2].value.setProperty("risk", bool(high_risk))
+        self.metric_cards[2].value.style().unpolish(self.metric_cards[2].value)
+        self.metric_cards[2].value.style().polish(self.metric_cards[2].value)
 
     def _export_report(self) -> None:
         if not self.result:
             return
-        target = filedialog.asksaveasfilename(
-            title="导出审查报告", defaultextension=".txt", filetypes=[("文本报告", "*.txt")],
-            initialfile=f"{SCENARIOS[self.scenario]['title']}-审查报告.txt",
+        target, _ = QFileDialog.getSaveFileName(
+            self,
+            "导出审查报告",
+            f"{SCENARIOS[self.scenario]['title']}-审查报告.txt",
+            "文本报告 (*.txt)",
         )
         if not target:
             return
         lines = [
-            "明鉴材料审查报告", f"审查场景：{SCENARIOS[self.scenario]['title']}",
-            f"材料数量：{len(self.result.files)}", f"问题数量：{len(self.result.findings)}", "",
+            "明鉴材料审查报告",
+            f"审查场景：{SCENARIOS[self.scenario]['title']}",
+            f"材料数量：{len(self.result.files)}",
+            f"问题数量：{len(self.result.findings)}",
+            "",
         ]
         for index, finding in enumerate(self.result.findings, start=1):
             evidence = finding.evidence[0] if finding.evidence else None
             lines.extend([
                 f"{index}. [{SEVERITY_META[finding.severity][0]}] {finding.title}",
-                f"编号：{finding.finding_id}", f"说明：{finding.detail}",
+                f"编号：{finding.finding_id}",
+                f"说明：{finding.detail}",
                 f"证据：{evidence.excerpt if evidence else '暂无'}",
                 f"来源：{evidence.file if evidence else '审查规则'} 第 {evidence.page if evidence else 1} 页",
                 f"建议：{finding.suggestion}",
-                f"状态：{'已解决' if finding.finding_id in self.resolved_ids else '待处理'}", "",
+                f"状态：{'已解决' if finding.finding_id in self.resolved_ids else '待处理'}",
+                "",
             ])
         Path(target).write_text("\n".join(lines), encoding="utf-8")
-        self.status_label.configure(text=f"报告已导出到 {target}")
+        self.status_label.setText(f"报告已导出到 {target}")
 
     @staticmethod
-    def _file_size(path: Path) -> str:
-        size = path.stat().st_size
-        return f"{size / (1024 * 1024):.1f} MB" if size >= 1024 * 1024 else f"{max(1, round(size / 1024))} KB"
+    def _add_placeholder(widget: QListWidget, text: str) -> None:
+        item = QListWidgetItem(text)
+        item.setFlags(Qt.ItemFlag.NoItemFlags)
+        item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+        item.setSizeHint(QSize(240, 150))
+        widget.addItem(item)
+
+
+def format_file_size(path: Path) -> str:
+    size = path.stat().st_size
+    return f"{size / (1024 * 1024):.1f} MB" if size >= 1024 * 1024 else f"{max(1, round(size / 1024))} KB"
+
+
+APP_STYLE = f"""
+* {{
+    font-family: "Microsoft YaHei UI", "Segoe UI";
+    color: {COLORS['text']};
+    outline: none;
+}}
+QWidget#root, QMainWindow {{ background: {COLORS['app']}; }}
+QFrame#sidebar {{ background: {COLORS['sidebar']}; border-right: 1px solid #1D2630; }}
+QLabel#brandMark {{ background: {COLORS['accent']}; color: #062018; border-radius: 9px; font-size: 18px; font-weight: 700; }}
+QLabel#brandName {{ font-size: 20px; font-weight: 700; }}
+QLabel#brandEnglish {{ color: #71808F; font-family: "Cascadia Mono"; font-size: 9px; }}
+QLabel#sectionLabel {{ color: #677483; font-size: 11px; font-weight: 600; margin: 2px 7px 6px 7px; }}
+QPushButton#navButton {{ background: transparent; color: #B6C0C9; border: 0; border-radius: 8px; padding: 0 14px; text-align: left; font-size: 13px; font-weight: 600; }}
+QPushButton#navButton:hover {{ background: #151D26; color: #FFFFFF; }}
+QPushButton#navButton:checked {{ background: {COLORS['accent_dark']}; color: {COLORS['accent']}; }}
+QPushButton#navButton:disabled {{ color: #4E5A66; }}
+QFrame#privacyCard {{ background: #0D2C23; border: 1px solid #154437; border-radius: 9px; }}
+QLabel#privacyTitle {{ color: {COLORS['accent']}; font-size: 12px; font-weight: 700; }}
+QLabel#privacyBody {{ color: #A6BDB5; font-size: 10px; line-height: 1.5; }}
+QLabel#version {{ color: #53606C; font-family: "Cascadia Mono"; font-size: 9px; margin: 8px 5px 0 5px; }}
+QLabel#pageTitle {{ font-size: 28px; font-weight: 700; }}
+QLabel#pageSubtitle {{ color: {COLORS['muted']}; font-size: 12px; }}
+QPushButton#primaryButton {{ background: {COLORS['accent']}; color: #062018; border: 0; border-radius: 8px; padding: 0 18px; font-size: 12px; font-weight: 700; }}
+QPushButton#primaryButton:hover {{ background: {COLORS['accent_hover']}; }}
+QPushButton#primaryButton:disabled {{ background: #2F6655; color: #90AA9F; }}
+QPushButton#secondaryButton, QPushButton#quietButton {{ background: {COLORS['panel_alt']}; border: 1px solid {COLORS['border']}; border-radius: 8px; padding: 0 17px; font-size: 11px; font-weight: 600; }}
+QPushButton#secondaryButton:hover, QPushButton#quietButton:hover {{ background: #202A34; border-color: #3A4856; }}
+QPushButton#quietButton {{ min-height: 30px; color: #A8B2BC; }}
+QPushButton#quietButton:disabled {{ color: #4C5863; background: transparent; }}
+QFrame#metricCard, QFrame#panel {{ background: {COLORS['panel']}; border: 1px solid {COLORS['border']}; border-radius: 9px; }}
+QLabel#metricCaption {{ color: {COLORS['muted']}; font-size: 10px; }}
+QLabel#metricValue {{ font-family: "Cascadia Mono"; font-size: 22px; font-weight: 700; }}
+QLabel#metricValue[risk="true"] {{ color: {COLORS['danger']}; }}
+QFrame#progressLine {{ background: {COLORS['border']}; }}
+QFrame#progressLine[running="true"] {{ background: {COLORS['accent']}; }}
+QLabel#panelTitle {{ font-size: 13px; font-weight: 700; }}
+QLabel#panelMeta {{ color: {COLORS['muted']}; font-size: 10px; }}
+QSplitter#workspaceSplitter::handle {{ background: transparent; width: 10px; }}
+QListWidget, QScrollArea, QWidget#detailContent {{ background: transparent; border: 0; }}
+QListWidget::item {{ color: #697785; border: 0; padding: 0; }}
+QListWidget::item:selected {{ background: {COLORS['accent_dark']}; border-radius: 8px; }}
+QWidget#listCard, QWidget#findingCard {{ background: {COLORS['panel_alt']}; border-radius: 8px; }}
+QLabel#fileType {{ background: #202B35; color: {COLORS['accent']}; border-radius: 6px; font-family: "Cascadia Mono"; font-size: 9px; font-weight: 700; }}
+QLabel#fileName {{ font-size: 11px; font-weight: 700; }}
+QLabel#fileSize, QLabel#findingMeta {{ color: {COLORS['muted']}; font-family: "Cascadia Mono"; font-size: 8px; }}
+QPushButton#iconButton {{ background: transparent; border: 0; border-radius: 5px; color: #8995A0; font-size: 16px; }}
+QPushButton#iconButton:hover {{ background: #392329; color: {COLORS['danger']}; }}
+QLabel[role] {{ background: #242C34; border-radius: 5px; font-size: 9px; font-weight: 700; }}
+QLabel[role="resolved"] {{ background: #17362D; color: {COLORS['accent']}; }}
+QLabel#findingTitle {{ font-size: 11px; font-weight: 700; }}
+QLabel#findingTitleResolved {{ color: #77837F; font-size: 11px; font-weight: 600; }}
+QLabel#emptyState {{ color: #64717E; font-size: 12px; }}
+QLabel#detailBadge {{ background: #252D35; border-radius: 5px; font-size: 10px; font-weight: 700; }}
+QLabel#detailTitle {{ font-size: 21px; font-weight: 700; }}
+QLabel#detailBody {{ color: #B6C0C9; font-size: 12px; line-height: 1.55; }}
+QLabel#detailBodyStrong {{ font-size: 12px; line-height: 1.55; }}
+QLabel#detailSectionLabel {{ color: {COLORS['muted']}; font-size: 10px; font-weight: 700; margin-top: 4px; }}
+QFrame#evidenceCard {{ background: #0D1319; border: 1px solid {COLORS['border']}; border-radius: 8px; }}
+QLabel#evidenceLabel {{ color: {COLORS['accent']}; font-size: 10px; font-weight: 700; }}
+QLabel#evidenceText {{ color: #D9E0E5; font-size: 12px; line-height: 1.55; }}
+QLabel#evidenceSource {{ color: {COLORS['muted']}; font-family: "Cascadia Mono"; font-size: 9px; }}
+QLabel#statusLabel {{ color: {COLORS['muted']}; font-size: 10px; }}
+QScrollBar:vertical {{ background: transparent; width: 8px; margin: 4px 1px; }}
+QScrollBar::handle:vertical {{ background: #33404D; min-height: 36px; border-radius: 4px; }}
+QScrollBar::handle:vertical:hover {{ background: #465563; }}
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
+QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{ background: transparent; }}
+"""
 
 
 def main() -> None:
-    ctk.set_appearance_mode("dark")
-    app = MingJianApp()
-    app.mainloop()
+    app = QApplication(sys.argv)
+    app.setApplicationName("明鉴")
+    app.setApplicationVersion("0.4.0")
+    app.setWindowIcon(QIcon(str(resource_path("assets/mingjian.ico"))))
+    palette = QPalette()
+    palette.setColor(QPalette.ColorRole.Window, QColor(COLORS["app"]))
+    palette.setColor(QPalette.ColorRole.WindowText, QColor(COLORS["text"]))
+    app.setPalette(palette)
+    window = MingJianWindow()
+    window.show()
+    sys.exit(app.exec())
 
 
 if __name__ == "__main__":

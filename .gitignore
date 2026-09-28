@@ -2,6 +2,7 @@ node_modules/
 .venv/
 build/
 dist/
+dist-web/
 
 __pycache__/
 *.py[cod]
