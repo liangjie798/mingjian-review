@@ -3,15 +3,21 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
-from PySide6.QtCore import QObject, QSize, Qt, QThread, Signal, Slot
-from PySide6.QtGui import QColor, QFont, QIcon, QPalette
+from PySide6.QtCore import QObject, QSettings, QSize, Qt, QThread, QTimer, Signal, Slot
+from PySide6.QtGui import QColor, QDragEnterEvent, QDropEvent, QFont, QIcon, QPalette, QPixmap
 from PySide6.QtWidgets import (
     QApplication,
     QButtonGroup,
+    QCheckBox,
+    QComboBox,
+    QDialog,
+    QDialogButtonBox,
     QFileDialog,
+    QFormLayout,
     QFrame,
     QHBoxLayout,
     QLabel,
+    QLineEdit,
     QListWidget,
     QListWidgetItem,
     QMainWindow,
@@ -24,6 +30,7 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from backend.model_provider import ModelConfig, list_models
 from backend.review_engine import Finding, ReviewResult, SUPPORTED_SUFFIXES, review_paths
 
 
@@ -77,15 +84,16 @@ class ReviewWorker(QObject):
     completed = Signal(object)
     failed = Signal(str)
 
-    def __init__(self, scenario: str, paths: list[Path]) -> None:
+    def __init__(self, scenario: str, paths: list[Path], model_config: ModelConfig) -> None:
         super().__init__()
         self.scenario = scenario
         self.paths = paths
+        self.model_config = model_config
 
     @Slot()
     def run(self) -> None:
         try:
-            result = review_paths(self.scenario, self.paths, self.progress.emit)
+            result = review_paths(self.scenario, self.paths, self.progress.emit, self.model_config)
             self.completed.emit(result)
         except Exception as error:
             self.failed.emit(str(error))
@@ -179,7 +187,8 @@ class FindingRow(QWidget):
         title.setObjectName("findingTitleResolved" if resolved else "findingTitle")
         title.setWordWrap(True)
         source = finding.evidence[0].file if finding.evidence else "审查规则"
-        meta = QLabel(f"{finding.finding_id}  ·  {source}")
+        origin = "大模型" if finding.source == "model" else "规则"
+        meta = QLabel(f"{finding.finding_id}  ·  {origin}  ·  {source}")
         meta.setObjectName("findingMeta")
         texts.addWidget(title)
         texts.addWidget(meta)
@@ -188,11 +197,107 @@ class FindingRow(QWidget):
         self.setStyleSheet(f"QLabel[role='{finding.severity}'] {{ color: {color}; }}")
 
 
+class ModelSettingsDialog(QDialog):
+    def __init__(self, config: ModelConfig, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setWindowTitle("模型接口")
+        self.setMinimumWidth(540)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(24, 22, 24, 20)
+        layout.setSpacing(15)
+        title = QLabel("可选的大模型增强")
+        title.setObjectName("dialogTitle")
+        description = QLabel("默认关闭，内置规则可直接审查。启用后可连接 OpenAI 兼容接口或本机 Ollama，模型结果会标注为“大模型”。")
+        description.setObjectName("dialogDescription")
+        description.setWordWrap(True)
+        layout.addWidget(title)
+        layout.addWidget(description)
+
+        form = QFormLayout()
+        form.setSpacing(12)
+        self.enabled = QCheckBox("启用大模型增强")
+        self.enabled.setChecked(config.enabled)
+        self.provider = QComboBox()
+        self.provider.addItem("OpenAI 兼容接口", "openai")
+        self.provider.addItem("Ollama 本地模型", "ollama")
+        self.provider.setCurrentIndex(1 if config.provider == "ollama" else 0)
+        self.base_url = QLineEdit(config.base_url)
+        self.model = QComboBox()
+        self.model.setEditable(True)
+        self.model.addItems(["qwen3.5:4b", "qwen3.5:9b", "deepseek-r1:7b"])
+        self.model.setCurrentText(config.model)
+        self.api_key = QLineEdit(config.api_key)
+        self.api_key.setEchoMode(QLineEdit.EchoMode.Password)
+        self.api_key.setPlaceholderText("本地 Ollama 无需填写")
+        form.addRow("状态", self.enabled)
+        form.addRow("接口类型", self.provider)
+        form.addRow("接口地址", self.base_url)
+        form.addRow("模型名称", self.model)
+        form.addRow("API Key", self.api_key)
+        layout.addLayout(form)
+
+        note = QLabel("OpenAI 兼容地址示例：https://服务域名/v1。密钥仅保存在当前 Windows 用户配置中，不会写入审查报告。")
+        note.setObjectName("settingsNote")
+        note.setWordWrap(True)
+        layout.addWidget(note)
+        test_row = QHBoxLayout()
+        self.test_status = QLabel("接口尚未检测")
+        self.test_status.setObjectName("testStatus")
+        test_button = QPushButton("检测连接")
+        test_button.setObjectName("secondaryButton")
+        test_button.setFixedHeight(36)
+        test_button.clicked.connect(self._test_connection)
+        test_row.addWidget(self.test_status, 1)
+        test_row.addWidget(test_button)
+        layout.addLayout(test_row)
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Cancel | QDialogButtonBox.StandardButton.Save)
+        buttons.accepted.connect(self.accept)
+        buttons.rejected.connect(self.reject)
+        layout.addWidget(buttons)
+        self.provider.currentIndexChanged.connect(self._provider_changed)
+        self._provider_changed()
+
+    def _provider_changed(self) -> None:
+        is_ollama = self.provider.currentData() == "ollama"
+        self.api_key.setEnabled(not is_ollama)
+        known = {"", "http://127.0.0.1:11434", "https://api.openai.com/v1"}
+        if self.base_url.text().strip() in known:
+            self.base_url.setText("http://127.0.0.1:11434" if is_ollama else "https://api.openai.com/v1")
+
+    def config(self) -> ModelConfig:
+        return ModelConfig(
+            enabled=self.enabled.isChecked(),
+            provider=self.provider.currentData(),
+            base_url=self.base_url.text().strip(),
+            model=self.model.currentText().strip(),
+            api_key=self.api_key.text().strip(),
+        )
+
+    def _test_connection(self) -> None:
+        self.test_status.setText("正在检测…")
+        QApplication.processEvents()
+        config = self.config()
+        config.timeout = 8
+        try:
+            models = list_models(config)
+        except RuntimeError as error:
+            self.test_status.setText(str(error))
+            self.test_status.setProperty("ok", False)
+        else:
+            for model in models:
+                if self.model.findText(model) < 0:
+                    self.model.addItem(model)
+            self.test_status.setText(f"连接成功 · 发现 {len(models)} 个模型")
+            self.test_status.setProperty("ok", True)
+        self.test_status.style().unpolish(self.test_status)
+        self.test_status.style().polish(self.test_status)
+
+
 class MingJianWindow(QMainWindow):
     def __init__(self) -> None:
         super().__init__()
         self.setWindowTitle("明鉴 · 材料审查工具")
-        icon_path = resource_path("assets/mingjian.ico")
+        icon_path = resource_path("assets/mingjian-v2.ico")
         if icon_path.exists():
             self.setWindowIcon(QIcon(str(icon_path)))
 
@@ -203,12 +308,15 @@ class MingJianWindow(QMainWindow):
         self.resolved_ids: set[str] = set()
         self.thread: QThread | None = None
         self.worker: ReviewWorker | None = None
+        self.settings = QSettings("MingJian", "MingJian")
+        self.model_config = self._load_model_config()
+        self.setAcceptDrops(True)
 
         screen = QApplication.primaryScreen().availableGeometry()
-        width = min(1500, max(1180, int(screen.width() * 0.9)))
-        height = min(920, max(720, int(screen.height() * 0.88)))
+        width = min(1320, max(1060, int(screen.width() * 0.82)))
+        height = min(860, max(680, int(screen.height() * 0.82)))
         self.resize(width, height)
-        self.setMinimumSize(1120, 700)
+        self.setMinimumSize(1040, 680)
         self.move(screen.center() - self.rect().center())
 
         self.setStyleSheet(APP_STYLE)
@@ -228,17 +336,20 @@ class MingJianWindow(QMainWindow):
     def _build_sidebar(self) -> QWidget:
         sidebar = QFrame()
         sidebar.setObjectName("sidebar")
-        sidebar.setFixedWidth(232)
+        sidebar.setFixedWidth(212)
         layout = QVBoxLayout(sidebar)
         layout.setContentsMargins(18, 24, 18, 18)
         layout.setSpacing(6)
 
         brand = QHBoxLayout()
         brand.setSpacing(11)
-        mark = QLabel("明")
+        mark = QLabel()
         mark.setObjectName("brandMark")
         mark.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        mark.setFixedSize(40, 40)
+        mark.setFixedSize(44, 44)
+        logo_path = resource_path("assets/mingjian-icon-v2.png")
+        if logo_path.exists():
+            mark.setPixmap(QPixmap(str(logo_path)).scaled(40, 40, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
         brand_text = QVBoxLayout()
         brand_text.setSpacing(0)
         name = QLabel("明鉴")
@@ -291,7 +402,7 @@ class MingJianWindow(QMainWindow):
         privacy_layout.addWidget(privacy_title)
         privacy_layout.addWidget(privacy_body)
         layout.addWidget(privacy)
-        version = QLabel("v0.4  ·  Qt Desktop")
+        version = QLabel("v0.5  ·  Zero-config Desktop")
         version.setObjectName("version")
         layout.addWidget(version)
         return sidebar
@@ -312,14 +423,20 @@ class MingJianWindow(QMainWindow):
         header_text.addWidget(self.title_label)
         header_text.addWidget(self.subtitle_label)
         header.addLayout(header_text, 1)
+        self.model_button = QPushButton()
+        self.model_button.setObjectName("modelButton")
+        self.model_button.setMinimumSize(112, 42)
+        self.model_button.clicked.connect(self._open_model_settings)
+        self._update_model_button()
         self.add_button = QPushButton("＋  添加材料")
         self.add_button.setObjectName("secondaryButton")
-        self.add_button.setMinimumSize(126, 42)
+        self.add_button.setMinimumSize(112, 42)
         self.add_button.clicked.connect(self._choose_files)
         self.review_button = QPushButton("开始审查")
         self.review_button.setObjectName("primaryButton")
-        self.review_button.setMinimumSize(126, 42)
+        self.review_button.setMinimumSize(112, 42)
         self.review_button.clicked.connect(self._start_review)
+        header.addWidget(self.model_button)
         header.addWidget(self.add_button)
         header.addWidget(self.review_button)
         layout.addLayout(header)
@@ -362,17 +479,21 @@ class MingJianWindow(QMainWindow):
         splitter.setStretchFactor(0, 22)
         splitter.setStretchFactor(1, 29)
         splitter.setStretchFactor(2, 49)
-        splitter.setSizes([250, 330, 570])
+        splitter.setSizes([220, 290, 500])
         layout.addWidget(splitter, 1)
 
         footer = QHBoxLayout()
         self.status_label = QLabel("就绪")
         self.status_label.setObjectName("statusLabel")
+        self.clear_button = QPushButton("清空材料")
+        self.clear_button.setObjectName("quietButton")
+        self.clear_button.clicked.connect(self._clear_materials)
         self.export_button = QPushButton("导出审查报告")
         self.export_button.setObjectName("quietButton")
         self.export_button.setEnabled(False)
         self.export_button.clicked.connect(self._export_report)
         footer.addWidget(self.status_label, 1)
+        footer.addWidget(self.clear_button)
         footer.addWidget(self.export_button)
         layout.addLayout(footer)
         return workspace
@@ -401,24 +522,76 @@ class MingJianWindow(QMainWindow):
         )
         if not files:
             return
+        self._add_paths([Path(item) for item in files], auto_review=True)
+
+    def _add_paths(self, incoming: list[Path], auto_review: bool = False) -> None:
         known = {str(path).lower() for path in self.paths}
         rejected: list[str] = []
-        for item in files:
-            path = Path(item)
-            if path.suffix.lower() not in SUPPORTED_SUFFIXES:
+        added = 0
+        for path in incoming:
+            if not path.is_file() or path.suffix.lower() not in SUPPORTED_SUFFIXES:
                 rejected.append(path.name)
             elif str(path).lower() not in known:
                 self.paths.append(path)
                 known.add(str(path).lower())
+                added += 1
         self.result = None
         self.resolved_ids.clear()
         self._render_files()
         self._render_findings()
         self._render_detail()
         self._update_metrics()
-        self.status_label.setText(f"已添加 {len(self.paths)} 个文件，可以开始审查")
+        self.status_label.setText(f"已添加 {len(self.paths)} 个文件，正在准备自动审查" if added and auto_review else f"已添加 {len(self.paths)} 个文件")
         if rejected:
             QMessageBox.warning(self, "部分文件未添加", "暂不支持：\n" + "\n".join(rejected))
+        if added and auto_review and self.thread is None:
+            QTimer.singleShot(120, self._start_review)
+
+    def dragEnterEvent(self, event: QDragEnterEvent) -> None:
+        if self.thread is None and event.mimeData().hasUrls() and any(Path(url.toLocalFile()).suffix.lower() in SUPPORTED_SUFFIXES for url in event.mimeData().urls()):
+            event.acceptProposedAction()
+
+    def dropEvent(self, event: QDropEvent) -> None:
+        paths = [Path(url.toLocalFile()) for url in event.mimeData().urls() if url.isLocalFile()]
+        self._add_paths(paths, auto_review=True)
+        event.acceptProposedAction()
+
+    def _load_model_config(self) -> ModelConfig:
+        provider = str(self.settings.value("model/provider", "openai"))
+        return ModelConfig(
+            enabled=self.settings.value("model/enabled", False, type=bool),
+            provider="ollama" if provider == "ollama" else "openai",
+            base_url=str(self.settings.value("model/base_url", "https://api.openai.com/v1")),
+            model=str(self.settings.value("model/name", "")),
+            api_key=str(self.settings.value("model/api_key", "")),
+        )
+
+    def _open_model_settings(self) -> None:
+        dialog = ModelSettingsDialog(self.model_config, self)
+        if dialog.exec() != QDialog.DialogCode.Accepted:
+            return
+        config = dialog.config()
+        if config.enabled and (not config.base_url or not config.model):
+            QMessageBox.warning(self, "模型配置不完整", "启用模型增强时，请填写接口地址和模型名称。")
+            return
+        self.model_config = config
+        self.settings.setValue("model/enabled", config.enabled)
+        self.settings.setValue("model/provider", config.provider)
+        self.settings.setValue("model/base_url", config.base_url)
+        self.settings.setValue("model/name", config.model)
+        self.settings.setValue("model/api_key", config.api_key)
+        self._update_model_button()
+        self.status_label.setText("模型增强已启用；下次审查自动调用接口" if config.enabled else "已切换为零配置内置规则审查")
+
+    def _update_model_button(self) -> None:
+        if self.model_config.enabled:
+            self.model_button.setText(f"AI · {self.model_config.model or '已启用'}")
+            self.model_button.setProperty("enabled", True)
+        else:
+            self.model_button.setText("模型接口 · 可选")
+            self.model_button.setProperty("enabled", False)
+        self.model_button.style().unpolish(self.model_button)
+        self.model_button.style().polish(self.model_button)
 
     def _remove_file(self, path: Path) -> None:
         self.paths = [item for item in self.paths if item != path]
@@ -431,11 +604,25 @@ class MingJianWindow(QMainWindow):
         self._render_detail()
         self._update_metrics()
 
+    def _clear_materials(self) -> None:
+        if self.thread is not None:
+            return
+        self.paths.clear()
+        self.result = None
+        self.selected_finding = None
+        self.resolved_ids.clear()
+        self.export_button.setEnabled(False)
+        self._render_files()
+        self._render_findings()
+        self._render_detail()
+        self._update_metrics()
+        self.status_label.setText(SCENARIOS[self.scenario]["hint"])
+
     def _render_files(self) -> None:
         self.file_list.clear()
         self.file_panel.meta_label.setText(f"{len(self.paths)} 个文件")
         if not self.paths:
-            self._add_placeholder(self.file_list, "尚未添加材料\n\n点击右上角“添加材料”")
+            self._add_placeholder(self.file_list, "拖入材料即可自动审查\n\n或点击右上角“添加材料”")
             return
         for path in self.paths:
             item = QListWidgetItem()
@@ -557,13 +744,14 @@ class MingJianWindow(QMainWindow):
         self.review_button.setEnabled(False)
         self.review_button.setText("正在审查…")
         self.add_button.setEnabled(False)
+        self.clear_button.setEnabled(False)
         self.progress_line.setProperty("running", True)
         self.progress_line.style().unpolish(self.progress_line)
         self.progress_line.style().polish(self.progress_line)
         self.status_label.setText("正在准备解析材料")
 
         self.thread = QThread(self)
-        self.worker = ReviewWorker(self.scenario, list(self.paths))
+        self.worker = ReviewWorker(self.scenario, list(self.paths), self.model_config)
         self.worker.moveToThread(self.thread)
         self.thread.started.connect(self.worker.run)
         self.worker.progress.connect(self._on_review_progress)
@@ -588,7 +776,7 @@ class MingJianWindow(QMainWindow):
         self._reset_review_controls()
         self.export_button.setEnabled(True)
         characters = sum(item.characters for item in result.files)
-        self.status_label.setText(f"审查完成  ·  {len(result.files)} 个文件  ·  {characters:,} 个字符")
+        self.status_label.setText(f"审查完成  ·  {len(result.files)} 个文件  ·  {characters:,} 个字符  ·  {result.model_status}")
         self._render_findings()
         self._render_detail()
         self._update_metrics()
@@ -603,6 +791,7 @@ class MingJianWindow(QMainWindow):
         self.review_button.setEnabled(True)
         self.review_button.setText("重新审查" if self.result else "开始审查")
         self.add_button.setEnabled(True)
+        self.clear_button.setEnabled(True)
         self.progress_line.setProperty("running", False)
         self.progress_line.style().unpolish(self.progress_line)
         self.progress_line.style().polish(self.progress_line)
@@ -640,6 +829,7 @@ class MingJianWindow(QMainWindow):
             f"审查场景：{SCENARIOS[self.scenario]['title']}",
             f"材料数量：{len(self.result.files)}",
             f"问题数量：{len(self.result.findings)}",
+            f"审查方式：{self.result.model_status}",
             "",
         ]
         for index, finding in enumerate(self.result.findings, start=1):
@@ -647,9 +837,10 @@ class MingJianWindow(QMainWindow):
             lines.extend([
                 f"{index}. [{SEVERITY_META[finding.severity][0]}] {finding.title}",
                 f"编号：{finding.finding_id}",
+                f"来源：{'大模型' if finding.source == 'model' else '内置规则'}",
                 f"说明：{finding.detail}",
                 f"证据：{evidence.excerpt if evidence else '暂无'}",
-                f"来源：{evidence.file if evidence else '审查规则'} 第 {evidence.page if evidence else 1} 页",
+                f"证据位置：{evidence.file if evidence else '审查规则'} 第 {evidence.page if evidence else 1} 页",
                 f"建议：{finding.suggestion}",
                 f"状态：{'已解决' if finding.finding_id in self.resolved_ids else '待处理'}",
                 "",
@@ -679,7 +870,7 @@ APP_STYLE = f"""
 }}
 QWidget#root, QMainWindow {{ background: {COLORS['app']}; }}
 QFrame#sidebar {{ background: {COLORS['sidebar']}; border-right: 1px solid #1D2630; }}
-QLabel#brandMark {{ background: {COLORS['accent']}; color: #062018; border-radius: 9px; font-size: 18px; font-weight: 700; }}
+QLabel#brandMark {{ background: transparent; border: 0; }}
 QLabel#brandName {{ font-size: 20px; font-weight: 700; }}
 QLabel#brandEnglish {{ color: #71808F; font-family: "Cascadia Mono"; font-size: 9px; }}
 QLabel#sectionLabel {{ color: #677483; font-size: 11px; font-weight: 600; margin: 2px 7px 6px 7px; }}
@@ -698,6 +889,9 @@ QPushButton#primaryButton:hover {{ background: {COLORS['accent_hover']}; }}
 QPushButton#primaryButton:disabled {{ background: #2F6655; color: #90AA9F; }}
 QPushButton#secondaryButton, QPushButton#quietButton {{ background: {COLORS['panel_alt']}; border: 1px solid {COLORS['border']}; border-radius: 8px; padding: 0 17px; font-size: 11px; font-weight: 600; }}
 QPushButton#secondaryButton:hover, QPushButton#quietButton:hover {{ background: #202A34; border-color: #3A4856; }}
+QPushButton#modelButton {{ background: #101820; color: #8D99A6; border: 1px solid #25313C; border-radius: 8px; padding: 0 14px; font-size: 10px; font-weight: 600; }}
+QPushButton#modelButton:hover {{ background: #18232D; color: #DDE5EA; border-color: #3B4A57; }}
+QPushButton#modelButton[enabled="true"] {{ background: #0D2C23; color: {COLORS['accent']}; border-color: #1B5B48; }}
 QPushButton#quietButton {{ min-height: 30px; color: #A8B2BC; }}
 QPushButton#quietButton:disabled {{ color: #4C5863; background: transparent; }}
 QFrame#metricCard, QFrame#panel {{ background: {COLORS['panel']}; border: 1px solid {COLORS['border']}; border-radius: 9px; }}
@@ -738,20 +932,34 @@ QScrollBar::handle:vertical {{ background: #33404D; min-height: 36px; border-rad
 QScrollBar::handle:vertical:hover {{ background: #465563; }}
 QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {{ height: 0; }}
 QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {{ background: transparent; }}
+QDialog {{ background: {COLORS['app']}; }}
+QLabel#dialogTitle {{ font-size: 21px; font-weight: 700; }}
+QLabel#dialogDescription, QLabel#settingsNote {{ color: {COLORS['muted']}; font-size: 11px; line-height: 1.5; }}
+QLabel#testStatus {{ color: {COLORS['muted']}; font-size: 10px; }}
+QLabel#testStatus[ok="true"] {{ color: {COLORS['accent']}; }}
+QLineEdit, QComboBox {{ min-height: 34px; background: {COLORS['panel_alt']}; border: 1px solid {COLORS['border']}; border-radius: 7px; padding: 0 10px; selection-background-color: {COLORS['accent_dark']}; }}
+QLineEdit:focus, QComboBox:focus {{ border-color: {COLORS['accent']}; }}
+QComboBox QAbstractItemView {{ background: {COLORS['panel_alt']}; border: 1px solid {COLORS['border']}; selection-background-color: {COLORS['accent_dark']}; }}
+QCheckBox {{ spacing: 8px; }}
+QDialogButtonBox QPushButton {{ min-width: 80px; min-height: 34px; background: {COLORS['panel_alt']}; border: 1px solid {COLORS['border']}; border-radius: 7px; }}
+QDialogButtonBox QPushButton:hover {{ border-color: {COLORS['accent']}; }}
 """
 
 
 def main() -> None:
     app = QApplication(sys.argv)
     app.setApplicationName("明鉴")
-    app.setApplicationVersion("0.4.0")
-    app.setWindowIcon(QIcon(str(resource_path("assets/mingjian.ico"))))
+    app.setApplicationVersion("0.5.0")
+    app.setWindowIcon(QIcon(str(resource_path("assets/mingjian-v2.ico"))))
     palette = QPalette()
     palette.setColor(QPalette.ColorRole.Window, QColor(COLORS["app"]))
     palette.setColor(QPalette.ColorRole.WindowText, QColor(COLORS["text"]))
     app.setPalette(palette)
     window = MingJianWindow()
     window.show()
+    startup_paths = [Path(argument) for argument in sys.argv[1:] if Path(argument).is_file()]
+    if startup_paths:
+        QTimer.singleShot(120, lambda: window._add_paths(startup_paths, auto_review=True))
     sys.exit(app.exec())
 
 

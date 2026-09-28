@@ -10,11 +10,13 @@
 - 问题销项及重新审查交互；
 - PDF、DOCX、XLSX和文本文件本地解析；
 - 原生Windows工作台与多线程审查；
+- 文件拖入或选择后自动审查，普通用户无需配置；
+- 可选OpenAI兼容接口与Ollama本地模型；
 - 可插拔场景包示例。
 
 ## 直接运行
 
-双击`dist/MingJian.exe`。程序直接打开原生桌面工作台，不启动浏览器、本地Web服务或监听端口，也不需要单独安装Python或Node.js。
+双击`dist/MingJian.exe`，选择或拖入材料后会自动审查。程序不需要单独安装Python、Node.js或大模型。高级用户可以在“模型接口”中增加自己的OpenAI兼容服务或Ollama模型。
 
 ## 产品官网
 
@@ -38,4 +40,4 @@ py -m venv .venv
 
 ## 说明
 
-当前已接入基础文件解析和确定性演示规则，尚未接入扫描件OCR和大模型。架构、构建及验证方式见[DEVELOPMENT.md](./DEVELOPMENT.md)，后续路线见[DEV_STEPS.md](./DEV_STEPS.md)，官网发布说明见[website/README.md](./website/README.md)。
+当前已接入文件解析、确定性规则和可选大模型接口，尚未接入扫描件OCR。架构、构建及验证方式见[DEVELOPMENT.md](./DEVELOPMENT.md)，免费模型调研见[AI_MODELS.md](./AI_MODELS.md)，后续路线见[DEV_STEPS.md](./DEV_STEPS.md)。

@@ -2,7 +2,7 @@
 
 ## 1. 当前版本
 
-- 版本：0.4.0 Qt Desktop
+- 版本：0.5.0 Zero-config Desktop
 - 平台：Windows 10/11 x64
 - 桌面框架：PySide6 / Qt Widgets原生窗口
 - 审查引擎：Python 3.13纯本地模块
@@ -10,7 +10,7 @@
 - 打包：PyInstaller单文件模式
 - 当前产物：`dist/MingJian.exe`
 
-当前版本完整展示竞赛材料审查和合同审查两个工作台，支持上传PDF、DOCX、XLSX、TXT、MD、CSV和JSON。原生PDF由PyMuPDF解析，Word由python-docx解析，Excel由openpyxl解析。
+当前版本完整展示竞赛材料审查和合同审查两个工作台，支持上传PDF、DOCX、XLSX、TXT、MD、CSV和JSON。原生PDF由PyMuPDF解析，Word由python-docx解析，Excel由openpyxl解析。用户添加、拖入材料或通过命令行传入文件后会自动开始审查，无需配置模型或API。
 
 ## 2. 设计来源与原创边界
 
@@ -38,10 +38,11 @@ PySide6 / Qt Widgets原生工作台
         ├── PDF / Word / Excel解析
         ├── 竞赛规则执行器
         ├── 合同规则执行器
+        ├── 可选模型接口层
         └── Evidence / Finding结构化结果
 ```
 
-桌面程序不启动HTTP服务、不打开WebView，也不监听本地端口。界面线程只负责交互，文件解析和规则执行放在后台线程，避免审查大文件时阻塞窗口。
+桌面程序不启动HTTP服务、不打开WebView，也不监听本地端口。界面线程只负责交互，文件解析和规则执行放在后台线程，避免审查大文件时阻塞窗口。大模型增强默认关闭；启用时桌面端作为客户端访问用户配置的接口。
 
 ## 4. 目录结构
 
@@ -49,6 +50,7 @@ PySide6 / Qt Widgets原生工作台
 .
 ├── backend/
 │   ├── review_engine.py       文件解析、规则与统一结果模型
+│   ├── model_provider.py      OpenAI兼容与Ollama模型适配器
 │   └── app.py                 保留的开发期API适配层
 ├── scenario-packs/
 │   ├── competition/           竞赛场景配置
@@ -59,6 +61,7 @@ PySide6 / Qt Widgets原生工作台
 ├── mingjian.spec              PyInstaller构建配置
 ├── build.ps1                  一键构建脚本
 ├── DEV_STEPS.md               后续开发路线
+├── AI_MODELS.md               免费模型调研与接口协议
 ├── DEVELOPMENT.md             本开发文档
 └── 材料审查智能体项目资料.md    调研、产品和评测资料
 ```
@@ -121,6 +124,7 @@ files=<一个或多个文件>
 
 - 按文件名检查报名表、项目书和承诺书；
 - 从“团队成员”字段估算人数；
+- 检查跨材料项目名称一致性、联系方式和承诺材料签署信息；
 - 问题输出风险等级、证据和整改建议；
 - 无确定问题时进入人工复核状态。
 
@@ -128,11 +132,16 @@ files=<一个或多个文件>
 
 - 识别预付款比例，演示规则上限为30%；
 - 检查是否提及验收但没有明确验收期限；
+- 检查违约责任、争议解决、自动续约和单方最终解释权；
 - 无确定问题时提示继续人工检查主体、金额和责任条款。
 
 这些是可演示的确定性规则，不构成赛事资格认定或法律意见。
 
-## 8. 新增场景
+## 8. 可选模型接口
+
+“模型接口”支持OpenAI兼容接口和Ollama本地接口。配置默认关闭，因此不会影响普通用户直接使用。接口不可用或模型返回格式错误时，程序保留内置规则结果并在状态栏说明跳过原因。模型选型、许可证和JSON输出协议见`AI_MODELS.md`。
+
+## 9. 新增场景
 
 1. 在`scenario-packs/<场景名>/`增加`manifest.json`和`default-rules.json`。
 2. 在`backend/review_engine.py`增加场景审查函数，输入统一为`list[tuple[str, list[str]]]`。
@@ -142,7 +151,7 @@ files=<一个或多个文件>
 
 后续应将当前Python函数式规则迁移为通用操作符，例如`required_document`、`regex_extract`、`between`、`equals_across_documents`和`sum_equals`。
 
-## 9. EXE构建
+## 10. EXE构建
 
 执行：
 
@@ -162,7 +171,7 @@ PyInstaller明确排除FastAPI、Uvicorn、PyWebView、Starlette和Pydantic，�
 
 Windows构建还会排除开发环境中Poppler可能注入的`icuuc.dll`和`icudt78.dll`。Qt 6.11在Windows上使用系统ICU；误打包Poppler的ICU 78会覆盖系统库，并在启动时触发`DLL load failed while importing QtCore`。`mingjian.spec`已固定这项规则，同时统一使用PySide6附带的MSVC运行库。
 
-## 10. 验证
+## 11. 验证
 
 本次构建已验证：
 
@@ -172,16 +181,16 @@ Windows构建还会排除开发环境中Poppler可能注入的`icuuc.dll`和`icu
 - 材料列表、风险详情、问题销项与文本报告导出可用；
 - 官网下载文件与`dist/MingJian.exe`的SHA-256一致。
 
-## 11. 已知限制
+## 12. 已知限制
 
 - 当前PDF解析只支持带文字层的原生PDF；扫描PDF需要后续接入PaddleOCR。
-- 当前没有接入大模型，规则抽取和语义审查使用内置演示逻辑。
+- 大模型增强依赖用户提供兼容接口；默认的零配置模式使用内置确定性规则。
 - DOC旧格式、XLS旧格式和图片尚未支持。
 - 当前展示文本证据片段，尚未根据PDF坐标绘制真实页面高亮框。
 - EXE未进行代码签名，Windows可能显示未知发布者提示。
 - 未实现项目持久化、版本管理和PDF报告导出。
 
-## 12. 下一阶段
+## 13. 下一阶段
 
 1. 接入PaddleOCR PP-StructureV3，补充扫描PDF和图片解析。
 2. 将场景JSON转换为通用规则执行器。
@@ -190,7 +199,7 @@ Windows构建还会排除开发环境中Poppler可能注入的`icuuc.dll`和`icu
 5. 制作30组测试材料并统计精确率、召回率和证据定位准确率。
 6. 增加安装包、应用图标、代码签名和GitHub Releases自动发布。
 
-## 13. 产品官网与下载发布
+## 14. 产品官网与下载发布
 
 官网位于`website/`，使用原生HTML、CSS和JavaScript构建，无运行时依赖。首页包含产品定位、真实软件截图、审查能力、工作流程、本地处理说明和Windows下载入口；`development.html`提供面向参赛评委与开发者的技术说明。
 

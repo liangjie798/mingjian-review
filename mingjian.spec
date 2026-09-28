@@ -10,7 +10,7 @@ a = Analysis(
     ["desktop.py"],
     pathex=[],
     binaries=[],
-    datas=[("scenario-packs", "scenario-packs"), ("assets/mingjian.ico", "assets")],
+    datas=[("scenario-packs", "scenario-packs"), ("assets/mingjian-v2.ico", "assets"), ("assets/mingjian-icon-v2.png", "assets")],
     hiddenimports=hiddenimports,
     hookspath=[],
     hooksconfig={},
@@ -65,5 +65,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon="assets/mingjian.ico",
+    icon="assets/mingjian-v2.ico",
 )
