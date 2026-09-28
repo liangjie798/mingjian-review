@@ -293,7 +293,8 @@ def review_paths(
                     suggestion=str(item.get("suggestion", "请人工复核并补充材料。"))[:800],
                     needs_human_review=True, source="model",
                 ))
-            model_status = f"内置规则 + {model_config.model} · 新增 {len(items)} 项"
+            model_label = "内置 Qwen2.5" if model_config.provider == "embedded" else model_config.model
+            model_status = f"内置规则 + {model_label} · 新增 {len(items)} 项"
         except RuntimeError as error:
             model_status = f"规则审查完成；模型增强跳过：{error}"
     return ReviewResult(parsed_files, findings, model_status)

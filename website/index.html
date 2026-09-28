@@ -1,197 +1,142 @@
 <!doctype html>
 <html lang="zh-CN">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#070908" />
-    <link rel="icon" type="image/png" href="./assets/mingjian-icon-v2.png" />
-    <meta name="description" content="明鉴是面向竞赛、合同与科研材料的本地智能审查工具。每条结论都能回到原文证据。" />
-    <title>明鉴 · 多场景材料智能审查</title>
-    <link rel="stylesheet" href="./styles.css" />
-  </head>
-  <body>
-    <header class="nav-shell" data-nav>
-      <a class="brand" href="#top" aria-label="明鉴首页">
-        <span class="brand-mark" aria-hidden="true"><img src="./assets/mingjian-icon-v2.png" alt="" /></span>
-        <span>明鉴</span>
-      </a>
-      <nav class="desktop-nav" aria-label="主导航">
-        <a href="#capabilities">产品能力</a>
-        <a href="#workflow">工作方式</a>
-        <a href="#privacy">隐私安全</a>
-        <a href="./development.html">开发文档</a>
-      </nav>
-      <div class="nav-actions">
-        <button class="menu-button" type="button" aria-expanded="false" data-menu>菜单</button>
-        <a class="nav-download" href="./downloads/MingJian.exe" download>下载 Windows 版</a>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="明鉴是一款内置本地 AI 的 Windows 材料审查工具，覆盖合同与大学生竞赛材料。">
+  <meta name="theme-color" content="#0b0e0d">
+  <title>明鉴 | 本地 AI 材料审查工具</title>
+  <link rel="icon" href="assets/mingjian-icon-v2.png">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="site-header">
+    <a class="brand" href="#top" aria-label="明鉴首页">
+      <img src="assets/mingjian-icon-v2.png" alt="" width="38" height="38">
+      <span>明鉴</span>
+    </a>
+    <nav aria-label="主导航">
+      <a href="#capabilities">能力</a>
+      <a href="#local-ai">本地 AI</a>
+      <a href="#workflow">使用方法</a>
+      <a href="https://github.com/liangjie798/mingjian-review" target="_blank" rel="noreferrer">GitHub</a>
+    </nav>
+    <a class="header-download" href="https://github.com/liangjie798/mingjian-review/releases/latest/download/MingJian-AI.exe">下载 Windows 版</a>
+  </header>
+
+  <main id="top">
+    <section class="hero section-shell">
+      <div class="hero-copy reveal">
+        <p class="eyebrow"><span></span> LOCAL AI DOCUMENT REVIEW</p>
+        <h1>把一叠材料，变成可以处理的结论。</h1>
+        <p class="hero-lead">明鉴在 Windows 本机完成文件解析、规则检查和 AI 语义审查。打开软件，拖入材料，问题与原文证据会自动排好。</p>
+        <div class="hero-actions">
+          <a class="primary-action" href="https://github.com/liangjie798/mingjian-review/releases/latest/download/MingJian-AI.exe">免费下载 EXE <span>↗</span></a>
+          <a class="text-action" href="#workflow">查看怎么使用</a>
+        </div>
+        <div class="trust-row" aria-label="产品信息">
+          <span>Windows 10 / 11</span>
+          <span>无需登录</span>
+          <span>模型已内置</span>
+        </div>
       </div>
-    </header>
+      <figure class="hero-visual reveal">
+        <img src="assets/hero-review-illustration.webp" alt="文件经过审查后形成清晰结论的抽象插画" width="1536" height="1024">
+        <figcaption><span>01</span> 从原始材料到可验证结论</figcaption>
+      </figure>
+    </section>
 
-    <div class="mobile-menu" data-mobile-menu hidden>
-      <a href="#capabilities">产品能力</a>
-      <a href="#workflow">工作方式</a>
-      <a href="#privacy">隐私安全</a>
-      <a href="./development.html">开发文档</a>
-    </div>
+    <section class="statement section-shell reveal" id="capabilities">
+      <p class="section-index">01 / 能力</p>
+      <p class="statement-text">规则负责确定性检查，AI 负责理解上下文。每个结论都回到文件、页码和原文片段。</p>
+    </section>
 
-    <main id="top">
-      <section class="hero section-shell">
-        <div class="pixel-field" aria-hidden="true"></div>
-        <div class="hero-copy reveal">
-          <p class="hero-kicker">LOCAL DOCUMENT REVIEW</p>
-          <h1>审查更快，<br /><span>证据更清楚。</span></h1>
-          <p class="hero-summary">明鉴读取规则、比对多份材料并定位原文，把竞赛申报和合同检查变成清晰的整改任务。</p>
-          <div class="hero-actions">
-            <a class="button button-primary" href="./downloads/MingJian.exe" download>
-              下载 Windows 版
-              <span aria-hidden="true">↘</span>
-            </a>
-            <a class="button button-quiet" href="#capabilities">查看产品能力</a>
-          </div>
-          <div class="download-meta">
-            <span>Windows 10 / 11 x64</span>
-            <span>68.47 MB</span>
-            <a href="./downloads/MingJian.exe.sha256.txt" download>SHA-256</a>
-          </div>
+    <section class="capability-grid section-shell">
+      <article class="capability capability-main reveal">
+        <div class="capability-number">A</div>
+        <div>
+          <p class="kicker">竞赛材料</p>
+          <h2>先找齐，再找对。</h2>
+          <p>检查申报书、承诺书、项目计划书和团队信息，识别缺失材料、成员异常与跨文件冲突。</p>
         </div>
+        <ul>
+          <li>材料完整性</li>
+          <li>团队与指导教师</li>
+          <li>名称、日期、金额一致性</li>
+        </ul>
+      </article>
+      <article class="capability reveal">
+        <div class="capability-number">B</div>
+        <p class="kicker">合同材料</p>
+        <h2>让风险有原文。</h2>
+        <p>定位付款比例、验收期限、违约责任等条款问题，并给出可执行的修改方向。</p>
+      </article>
+      <article class="capability metric-block reveal">
+        <p class="metric">7</p>
+        <p>种常见文档格式</p>
+        <small>PDF · DOCX · XLSX · TXT · MD · CSV · JSON</small>
+      </article>
+    </section>
 
-        <div class="hero-product reveal">
-          <div class="window-chrome">
-            <span>明鉴桌面端</span>
-            <span>本地优先</span>
-          </div>
-          <img src="./assets/app-home.png" alt="明鉴桌面端场景选择首页" />
-        </div>
-      </section>
-
-      <section class="statement section-shell reveal">
-        <p>不止回答文档问题</p>
-        <h2>从规则到证据，再到整改闭环。</h2>
-      </section>
-
-      <section class="capabilities section-shell" id="capabilities">
-        <div class="capability-index" role="tablist" aria-label="明鉴功能">
-          <button class="capability-tab active" role="tab" aria-selected="true" data-feature="competition">
-            <span>[00]</span>
-            <strong>竞赛材料审查</strong>
-          </button>
-          <button class="capability-tab" role="tab" aria-selected="false" data-feature="contract">
-            <span>[01]</span>
-            <strong>合同风险检查</strong>
-          </button>
-          <button class="capability-tab" role="tab" aria-selected="false" data-feature="evidence">
-            <span>[02]</span>
-            <strong>证据精确定位</strong>
-          </button>
-          <button class="capability-tab" role="tab" aria-selected="false" data-feature="local">
-            <span>[03]</span>
-            <strong>本地文件处理</strong>
-          </button>
-        </div>
-
-        <div class="feature-stage reveal">
-          <div class="feature-copy">
-            <p data-feature-number>[00] MATERIAL REVIEW</p>
-            <h2 data-feature-title>让比赛规则真正可执行</h2>
-            <p data-feature-body>上传比赛通知、报名表和项目书。明鉴检查材料完整性、团队人数与关键字段，输出按风险排序的整改清单。</p>
-          </div>
-          <div class="feature-visual">
-            <img data-feature-image src="./assets/app-workspace.png" alt="明鉴竞赛材料审查工作台" />
-            <div class="scan-line" aria-hidden="true"></div>
-          </div>
-        </div>
-      </section>
-
-      <section class="workflow section-shell" id="workflow">
-        <div class="workflow-heading reveal">
-          <p>HOW IT WORKS</p>
-          <h2>一次上传，完成可追溯审查。</h2>
-        </div>
-        <ol class="workflow-list">
-          <li class="reveal">
-            <span>01</span>
-            <h3>选择场景并上传材料</h3>
-            <p>支持PDF、DOCX、XLSX和常用文本格式，可同时处理多份文件。</p>
-          </li>
-          <li class="reveal">
-            <span>02</span>
-            <h3>提取规则与结构化事实</h3>
-            <p>将人员、主体、金额、日期和材料类型整理成统一的审查对象。</p>
-          </li>
-          <li class="reveal">
-            <span>03</span>
-            <h3>执行确定性检查</h3>
-            <p>程序处理人数、比例、期限和完整性，减少自由生成带来的不确定性。</p>
-          </li>
-          <li class="reveal">
-            <span>04</span>
-            <h3>回到原文完成整改</h3>
-            <p>每条问题附带文件、页码、原文片段和明确建议，可逐项销项。</p>
-          </li>
-        </ol>
-      </section>
-
-      <section class="scenario-band">
-        <div class="section-shell scenario-track" aria-label="支持场景">
-          <span>大学生竞赛</span>
-          <span>合同审查</span>
-          <span>科研材料</span>
-          <span>招聘材料</span>
-          <span>报销材料</span>
-        </div>
-      </section>
-
-      <section class="privacy section-shell" id="privacy">
-        <div class="privacy-copy reveal">
-          <p>PRIVACY BY DEFAULT</p>
-          <h2>材料留在本机，审查过程更可控。</h2>
-          <p>双击启动后，选择或拖入材料即可自动审查。内置规则无需账号、API Key或额外模型，也不会把文件上传到外部服务器。</p>
-        </div>
-        <div class="privacy-grid">
-          <article class="reveal">
-            <span>LOCAL</span>
-            <h3>本地文件解析</h3>
-            <p>PDF、Word和Excel在本机解析，适合包含未公开项目资料的场景。</p>
-          </article>
-          <article class="reveal">
-            <span>TRACE</span>
-            <h3>证据链可检查</h3>
-            <p>结论与文件、页码和原文绑定，人工可以快速复核判断依据。</p>
-          </article>
-          <article class="reveal">
-            <span>RULES</span>
-            <h3>规则与解释分离</h3>
-            <p>确定性规则直接可用；高级用户还可以配置OpenAI兼容接口或Ollama本地模型，补充语义审查。</p>
-          </article>
-        </div>
-      </section>
-
-      <section class="download-section section-shell reveal" id="download">
-        <div class="download-glow" aria-hidden="true"></div>
-        <p>READY TO REVIEW</p>
-        <h2>现在开始检查你的材料。</h2>
-        <p class="download-copy">下载明鉴Windows桌面端。无需安装Python或Node.js，双击即可启动。</p>
-        <div class="download-actions">
-          <a class="button button-primary large" href="./downloads/MingJian.exe" download>下载 MingJian.exe <span aria-hidden="true">↓</span></a>
-          <button class="button button-quiet" type="button" data-copy-hash>复制 SHA-256</button>
-        </div>
-        <code data-hash>BF46F1F4CF09BB092C4BC57B5B9B96B05F6E8F78B4CB4C75485D0D73281C4972</code>
-      </section>
-    </main>
-
-    <footer class="footer section-shell">
-      <div>
-        <a class="brand footer-brand" href="#top"><span class="brand-mark"><img src="./assets/mingjian-icon-v2.png" alt="" /></span><span>明鉴</span></a>
-        <p>多场景材料智能审查与证据溯源平台</p>
+    <section class="local-ai section-shell" id="local-ai">
+      <div class="local-copy reveal">
+        <p class="section-index">02 / 本地 AI</p>
+        <h2>模型就在软件里。</h2>
+        <p>内置 Qwen2.5 0.5B 指令模型与 llama.cpp 推理运行时。首次打开即可使用，无需安装 Python、配置服务或填写 API Key。</p>
+        <dl>
+          <div><dt>默认模式</dt><dd>离线、本机 CPU 推理</dd></div>
+          <div><dt>隐私</dt><dd>材料不上传到第三方接口</dd></div>
+          <div><dt>扩展</dt><dd>可切换 OpenAI 兼容接口或 Ollama</dd></div>
+        </dl>
       </div>
-      <div class="footer-links">
-        <a href="./development.html#project">项目说明</a>
-        <a href="./development.html">开发文档</a>
-        <a href="./downloads/MingJian.exe.sha256.txt">文件校验</a>
+      <div class="model-orbit reveal" aria-label="内置模型架构示意">
+        <div class="orbit-ring ring-one"></div>
+        <div class="orbit-ring ring-two"></div>
+        <div class="model-core">
+          <span>BUILT IN</span>
+          <strong>QWEN</strong>
+          <small>LOCAL INFERENCE</small>
+        </div>
+        <span class="orbit-label label-a">RULES</span>
+        <span class="orbit-label label-b">EVIDENCE</span>
+        <span class="orbit-label label-c">CONTEXT</span>
       </div>
-      <a class="back-top" href="#top">返回顶部 ↑</a>
-    </footer>
+    </section>
 
-    <script src="./script.js"></script>
-  </body>
+    <section class="workflow section-shell" id="workflow">
+      <div class="workflow-heading reveal">
+        <p class="section-index">03 / 使用方法</p>
+        <h2>三步完成一次审查。</h2>
+      </div>
+      <figure class="workflow-visual reveal">
+        <img src="assets/workflow-illustration.webp" alt="文件扫描、证据提取和风险结论的流程插画" width="1680" height="945">
+      </figure>
+      <ol class="steps">
+        <li class="reveal"><span>01</span><strong>选择场景</strong><p>进入竞赛材料或合同审查。</p></li>
+        <li class="reveal"><span>02</span><strong>拖入文件</strong><p>软件自动解析并立即开始审查。</p></li>
+        <li class="reveal"><span>03</span><strong>处理结论</strong><p>查看证据、整改并导出报告。</p></li>
+      </ol>
+    </section>
+
+    <section class="download-band">
+      <div class="section-shell download-inner reveal">
+        <p class="eyebrow"><span></span> READY ON WINDOWS</p>
+        <h2>现在，把材料交给明鉴。</h2>
+        <p>下载后双击运行。模型、规则和文档解析能力已经包含在软件中。</p>
+        <a class="primary-action light" href="https://github.com/liangjie798/mingjian-review/releases/latest/download/MingJian-AI.exe">下载 Windows 版 <span>↓</span></a>
+        <div class="download-meta">
+          <span>64 位 Windows</span>
+          <a href="https://github.com/liangjie798/mingjian-review/releases/latest" target="_blank" rel="noreferrer">版本与校验信息</a>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer section-shell">
+    <div class="brand"><img src="assets/mingjian-icon-v2.png" alt="" width="32" height="32"><span>明鉴</span></div>
+    <p>本地 AI 材料审查工具</p>
+    <a href="https://github.com/liangjie798/mingjian-review" target="_blank" rel="noreferrer">源代码与开发文档 ↗</a>
+  </footer>
+  <script src="script.js"></script>
+</body>
 </html>

@@ -1,43 +1,38 @@
 # 明鉴
 
-多场景材料智能审查与证据溯源平台。当前MVP包含大学生竞赛审查、合同审查和科研材料审查预览，并已生成Windows桌面版。
+明鉴是一款 Windows 本地材料审查工具。用户双击 EXE 后，把文件拖进窗口即可开始审查，无需安装 Python、注册账户或配置模型。
 
 ## 当前能力
 
-- 多场景入口与工作台；
-- 竞赛材料和合同审查演示数据；
-- 风险分级、原文证据和整改建议；
-- 问题销项及重新审查交互；
-- PDF、DOCX、XLSX和文本文件本地解析；
-- 原生Windows工作台与多线程审查；
-- 文件拖入或选择后自动审查，普通用户无需配置；
-- 可选OpenAI兼容接口与Ollama本地模型；
-- 可插拔场景包示例。
+- 大学生竞赛材料：检查必交材料、团队信息、日期、金额和跨文件一致性。
+- 合同材料：检查付款比例、验收期限、违约责任和关键条款。
+- 证据追溯：结论关联文件名、页码和原文片段。
+- 本地 AI：内置 Qwen2.5-0.5B-Instruct Q4_K_M，通过 llama.cpp 在 CPU 上推理。
+- 自定义模型：支持 OpenAI 兼容接口和 Ollama。
+- 文件格式：PDF、DOCX、XLSX、TXT、Markdown、CSV、JSON。
 
-## 直接运行
+## 下载
 
-双击`dist/MingJian.exe`，选择或拖入材料后会自动审查。程序不需要单独安装Python、Node.js或大模型。高级用户可以在“模型接口”中增加自己的OpenAI兼容服务或Ollama模型。
+在 [Releases](https://github.com/liangjie798/mingjian-review/releases/latest) 下载 `MingJian-AI.exe` 和 SHA-256 校验文件。
 
-## 产品官网
+## 开发
 
-`website/`包含可直接部署到GitHub Pages的静态官网，提供产品介绍、真实界面预览、开发说明和Windows版下载。
+开发环境、模型准备、打包与发布方法见 [DEVELOPMENT.md](DEVELOPMENT.md)。
 
-本地预览：
+## 目录
 
-```powershell
-npx vite website
+```text
+backend/          文档解析、规则审查和模型适配
+scenario-packs/   竞赛与合同规则包
+assets/           桌面端图标
+website/          GitHub Pages 静态官网
+desktop.py        PySide6 桌面应用
+mingjian.spec     PyInstaller 单文件配置
+build.ps1         Windows 构建脚本
 ```
 
-推送到GitHub的`main`分支后，`.github/workflows/deploy-pages.yml`会发布`website/`。仓库需要在Settings > Pages中选择GitHub Actions作为发布来源。
+## 模型与许可
 
-## 本地运行
+模型和运行时不会提交到源码仓库。发行包包含 Qwen2.5 模型与 llama.cpp，相关来源和许可证见 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md)。
 
-```powershell
-py -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements-desktop.txt
-.\.venv\Scripts\python.exe desktop.py
-```
-
-## 说明
-
-当前已接入文件解析、确定性规则和可选大模型接口，尚未接入扫描件OCR。架构、构建及验证方式见[DEVELOPMENT.md](./DEVELOPMENT.md)，免费模型调研见[AI_MODELS.md](./AI_MODELS.md)，后续路线见[DEV_STEPS.md](./DEV_STEPS.md)。
+审查结果用于辅助核对，重要合同和正式申报材料仍应由专业人员最终确认。

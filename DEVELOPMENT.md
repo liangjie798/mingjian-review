@@ -1,79 +1,14 @@
-# 明鉴开发文档
+# 开发与发布
 
-## 1. 当前版本
+## 技术结构
 
-- 版本：0.5.0 Zero-config Desktop
-- 平台：Windows 10/11 x64
-- 桌面框架：PySide6 / Qt Widgets原生窗口
-- 审查引擎：Python 3.13纯本地模块
-- 官网：独立HTML、CSS和JavaScript静态站点
-- 打包：PyInstaller单文件模式
-- 当前产物：`dist/MingJian.exe`
+- 桌面 UI：PySide6
+- 文件解析：PyMuPDF、python-docx、openpyxl
+- 本地推理：Qwen2.5 GGUF + llama.cpp
+- 打包：PyInstaller 单文件模式
+- 官网：原生 HTML、CSS、JavaScript，由 GitHub Pages 发布
 
-当前版本完整展示竞赛材料审查和合同审查两个工作台，支持上传PDF、DOCX、XLSX、TXT、MD、CSV和JSON。原生PDF由PyMuPDF解析，Word由python-docx解析，Excel由openpyxl解析。用户添加、拖入材料或通过命令行传入文件后会自动开始审查，无需配置模型或API。
-
-## 2. 设计来源与原创边界
-
-项目参考了以下GitHub开源项目的能力划分：
-
-| 项目 | 参考内容 | 本项目实现 |
-|---|---|---|
-| PaddleOCR / PP-StructureV3 | OCR、版面与表格解析 | 预留扫描件解析适配器，MVP尚未打包模型 |
-| Docling / MinerU | 统一文档对象、页块定位 | 自定义轻量页面文本模型 |
-| Instructor + Pydantic | 结构化输出和Schema校验 | Pydantic定义Evidence、Finding和接口响应 |
-| doc_assistant | 证据与解释分离 | 每条问题关联文件、页码和原文 |
-| Ethos | 确定性证据验证 | 审查结果必须携带Evidence对象 |
-| OfficeComprehensionBench | 文档能力评测 | 采用字段、问题和证据分别评价的思路 |
-
-本项目没有复制完整开源应用。场景包、竞赛规则、合同规则、事实对照、整改状态和前端交互均由本项目独立实现。
-
-## 3. 系统架构
-
-```text
-PySide6 / Qt Widgets原生工作台
-        │ Python函数调用
-        ▼
-本地审查引擎
-        ├── 文件格式路由
-        ├── PDF / Word / Excel解析
-        ├── 竞赛规则执行器
-        ├── 合同规则执行器
-        ├── 可选模型接口层
-        └── Evidence / Finding结构化结果
-```
-
-桌面程序不启动HTTP服务、不打开WebView，也不监听本地端口。界面线程只负责交互，文件解析和规则执行放在后台线程，避免审查大文件时阻塞窗口。大模型增强默认关闭；启用时桌面端作为客户端访问用户配置的接口。
-
-## 4. 目录结构
-
-```text
-.
-├── backend/
-│   ├── review_engine.py       文件解析、规则与统一结果模型
-│   ├── model_provider.py      OpenAI兼容与Ollama模型适配器
-│   └── app.py                 保留的开发期API适配层
-├── scenario-packs/
-│   ├── competition/           竞赛场景配置
-│   └── contract/              合同场景配置
-├── assets/                    应用图标
-├── desktop.py                 原生桌面工作台
-├── requirements-desktop.txt  桌面构建依赖
-├── mingjian.spec              PyInstaller构建配置
-├── build.ps1                  一键构建脚本
-├── DEV_STEPS.md               后续开发路线
-├── AI_MODELS.md               免费模型调研与接口协议
-├── DEVELOPMENT.md             本开发文档
-└── 材料审查智能体项目资料.md    调研、产品和评测资料
-```
-
-## 5. 本地开发
-
-### 环境要求
-
-- Python 3.13；
-- Windows 10或Windows 11。
-
-### 桌面端开发
+## 本地开发
 
 ```powershell
 py -m venv .venv
@@ -81,139 +16,49 @@ py -m venv .venv
 .\.venv\Scripts\python.exe desktop.py
 ```
 
-## 6. 可选开发API
+应用先对全部材料执行确定性规则，再把最多约 6000 个字符的文本样本交给模型。模型结论只有在文件名、页码、风险级别和原文证据通过校验后才会进入结果列表。
 
-`backend/app.py`保留FastAPI适配层，供接口实验和自动化调用使用。它不会被打包进桌面EXE，也不会随桌面程序启动。
+## 准备内置模型
 
-### 健康检查
+创建以下本地文件。它们已被 `.gitignore` 排除：
 
-```http
-GET /api/health
+```text
+models/qwen2.5-0.5b-instruct-q4_k_m.gguf
+models/LICENSE-Qwen2.5
+runtime/llama/llama-cli.exe
+runtime/llama/*.dll
+runtime/llama/LICENSE-llama.cpp
 ```
 
-### 场景列表
+模型使用 Qwen 官方的 Qwen2.5-0.5B-Instruct-GGUF Q4_K_M。运行时使用 llama.cpp Windows CPU x64 发行包。
 
-```http
-GET /api/scenarios
-```
-
-### 内置演示审查
-
-```http
-POST /api/demo/review
-Content-Type: application/json
-
-{"scenario":"competition"}
-```
-
-### 上传文件审查
-
-```http
-POST /api/review/files
-Content-Type: multipart/form-data
-
-scenario=competition|contract
-files=<一个或多个文件>
-```
-
-响应包括每个文件的解析器、页数、字符数和审查问题列表。
-
-## 7. 当前规则
-
-### 竞赛审查
-
-- 按文件名检查报名表、项目书和承诺书；
-- 从“团队成员”字段估算人数；
-- 检查跨材料项目名称一致性、联系方式和承诺材料签署信息；
-- 问题输出风险等级、证据和整改建议；
-- 无确定问题时进入人工复核状态。
-
-### 合同审查
-
-- 识别预付款比例，演示规则上限为30%；
-- 检查是否提及验收但没有明确验收期限；
-- 检查违约责任、争议解决、自动续约和单方最终解释权；
-- 无确定问题时提示继续人工检查主体、金额和责任条款。
-
-这些是可演示的确定性规则，不构成赛事资格认定或法律意见。
-
-## 8. 可选模型接口
-
-“模型接口”支持OpenAI兼容接口和Ollama本地接口。配置默认关闭，因此不会影响普通用户直接使用。接口不可用或模型返回格式错误时，程序保留内置规则结果并在状态栏说明跳过原因。模型选型、许可证和JSON输出协议见`AI_MODELS.md`。
-
-## 9. 新增场景
-
-1. 在`scenario-packs/<场景名>/`增加`manifest.json`和`default-rules.json`。
-2. 在`backend/review_engine.py`增加场景审查函数，输入统一为`list[tuple[str, list[str]]]`。
-3. 输出统一使用`Finding`，且至少包含一条`Evidence`。
-4. 在`desktop.py`的`SCENARIOS`中注册场景入口。
-5. 增加一个正确样本和至少三个错误样本。
-
-后续应将当前Python函数式规则迁移为通用操作符，例如`required_document`、`regex_extract`、`between`、`equals_across_documents`和`sum_equals`。
-
-## 10. EXE构建
-
-执行：
+## 构建 EXE
 
 ```powershell
 .\build.ps1
 ```
 
-脚本会：
+输出：
 
-1. 创建`.venv`并安装`requirements-desktop.txt`；
-2. 使用`mingjian.spec`生成单文件EXE；
-3. 嵌入Qt运行库、QSS视觉主题、应用图标和场景包；
-4. 计算SHA-256并写入校验文件；
-5. 将EXE和校验文件同步到官网的下载目录。
-
-PyInstaller明确排除FastAPI、Uvicorn、PyWebView、Starlette和Pydantic，桌面产物不包含Web运行时。
-
-Windows构建还会排除开发环境中Poppler可能注入的`icuuc.dll`和`icudt78.dll`。Qt 6.11在Windows上使用系统ICU；误打包Poppler的ICU 78会覆盖系统库，并在启动时触发`DLL load failed while importing QtCore`。`mingjian.spec`已固定这项规则，同时统一使用PySide6附带的MSVC运行库。
-
-## 11. 验证
-
-本次构建已验证：
-
-- 原生窗口可独立启动；
-- EXE进程没有监听TCP端口；
-- 竞赛和合同规则均返回结构化Finding；
-- 材料列表、风险详情、问题销项与文本报告导出可用；
-- 官网下载文件与`dist/MingJian.exe`的SHA-256一致。
-
-## 12. 已知限制
-
-- 当前PDF解析只支持带文字层的原生PDF；扫描PDF需要后续接入PaddleOCR。
-- 大模型增强依赖用户提供兼容接口；默认的零配置模式使用内置确定性规则。
-- DOC旧格式、XLS旧格式和图片尚未支持。
-- 当前展示文本证据片段，尚未根据PDF坐标绘制真实页面高亮框。
-- EXE未进行代码签名，Windows可能显示未知发布者提示。
-- 未实现项目持久化、版本管理和PDF报告导出。
-
-## 13. 下一阶段
-
-1. 接入PaddleOCR PP-StructureV3，补充扫描PDF和图片解析。
-2. 将场景JSON转换为通用规则执行器。
-3. 增加跨文档事实表和名称规范化。
-4. 增加规则确认工作台，避免AI自动执行未经确认的规则。
-5. 制作30组测试材料并统计精确率、召回率和证据定位准确率。
-6. 增加安装包、应用图标、代码签名和GitHub Releases自动发布。
-
-## 14. 产品官网与下载发布
-
-官网位于`website/`，使用原生HTML、CSS和JavaScript构建，无运行时依赖。首页包含产品定位、真实软件截图、审查能力、工作流程、本地处理说明和Windows下载入口；`development.html`提供面向参赛评委与开发者的技术说明。
-
-本地预览：
-
-```powershell
-npx vite website --host 127.0.0.1 --port 4175
+```text
+dist/MingJian-AI.exe
+dist/MingJian-AI.exe.sha256.txt
 ```
 
-重新构建桌面端后，需要同步下载文件并更新校验值：
+单文件包含约 469 MB 模型和 CPU 推理运行时，因此首次启动需要等待 PyInstaller 解压。发布文件超过 GitHub 普通仓库的单文件限制，应上传到 GitHub Releases。
+
+## 发布
+
+1. 运行规则与本地模型测试。
+2. 运行 `build.ps1`。
+3. 在干净的 Windows 10 或 Windows 11 机器上启动 EXE。
+4. 上传 EXE 与 SHA-256 文件到新的 GitHub Release。
+5. 官网使用 `releases/latest/download/MingJian-AI.exe`，无需随版本修改链接。
+
+## 官网预览
 
 ```powershell
-Copy-Item .\dist\MingJian.exe .\website\downloads\MingJian.exe -Force
-Copy-Item .\dist\MingJian.exe.sha256.txt .\website\downloads\MingJian.exe.sha256.txt -Force
+py -m http.server 4173 --directory website
 ```
 
-`.github/workflows/deploy-pages.yml`会在`main`分支更新时部署`website/`。当前官网直接托管EXE；正式发布时可把下载链接改为GitHub Releases，以保留历史版本和发布说明。
+打开 `http://127.0.0.1:4173`。推送到默认分支后，GitHub Actions 会发布 `website/`。

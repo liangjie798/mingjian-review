@@ -205,9 +205,9 @@ class ModelSettingsDialog(QDialog):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(24, 22, 24, 20)
         layout.setSpacing(15)
-        title = QLabel("可选的大模型增强")
+        title = QLabel("审查模型")
         title.setObjectName("dialogTitle")
-        description = QLabel("默认关闭，内置规则可直接审查。启用后可连接 OpenAI 兼容接口或本机 Ollama，模型结果会标注为“大模型”。")
+        description = QLabel("软件已内置 Qwen2.5 模型，可离线完成智能审查。高级用户也可以切换到自己的 OpenAI 兼容接口或 Ollama。")
         description.setObjectName("dialogDescription")
         description.setWordWrap(True)
         layout.addWidget(title)
@@ -215,12 +215,14 @@ class ModelSettingsDialog(QDialog):
 
         form = QFormLayout()
         form.setSpacing(12)
-        self.enabled = QCheckBox("启用大模型增强")
+        self.enabled = QCheckBox("启用 AI 智能审查")
         self.enabled.setChecked(config.enabled)
         self.provider = QComboBox()
+        self.provider.addItem("内置 Qwen2.5 0.5B", "embedded")
         self.provider.addItem("OpenAI 兼容接口", "openai")
         self.provider.addItem("Ollama 本地模型", "ollama")
-        self.provider.setCurrentIndex(1 if config.provider == "ollama" else 0)
+        provider_indexes = {"embedded": 0, "openai": 1, "ollama": 2}
+        self.provider.setCurrentIndex(provider_indexes.get(config.provider, 0))
         self.base_url = QLineEdit(config.base_url)
         self.model = QComboBox()
         self.model.setEditable(True)
@@ -236,7 +238,7 @@ class ModelSettingsDialog(QDialog):
         form.addRow("API Key", self.api_key)
         layout.addLayout(form)
 
-        note = QLabel("OpenAI 兼容地址示例：https://服务域名/v1。密钥仅保存在当前 Windows 用户配置中，不会写入审查报告。")
+        note = QLabel("使用内置模型时，文件和模型推理都留在本机。外部接口的密钥仅保存在当前 Windows 用户配置中。")
         note.setObjectName("settingsNote")
         note.setWordWrap(True)
         layout.addWidget(note)
@@ -258,8 +260,16 @@ class ModelSettingsDialog(QDialog):
         self._provider_changed()
 
     def _provider_changed(self) -> None:
+        is_embedded = self.provider.currentData() == "embedded"
         is_ollama = self.provider.currentData() == "ollama"
-        self.api_key.setEnabled(not is_ollama)
+        self.base_url.setEnabled(not is_embedded)
+        self.model.setEnabled(not is_embedded)
+        self.api_key.setEnabled(not is_embedded and not is_ollama)
+        if is_embedded:
+            self.base_url.clear()
+            self.model.setCurrentText("Qwen2.5-0.5B-Instruct Q4_K_M")
+            self.api_key.clear()
+            return
         known = {"", "http://127.0.0.1:11434", "https://api.openai.com/v1"}
         if self.base_url.text().strip() in known:
             self.base_url.setText("http://127.0.0.1:11434" if is_ollama else "https://api.openai.com/v1")
@@ -287,7 +297,10 @@ class ModelSettingsDialog(QDialog):
             for model in models:
                 if self.model.findText(model) < 0:
                     self.model.addItem(model)
-            self.test_status.setText(f"连接成功 · 发现 {len(models)} 个模型")
+            if config.provider == "embedded":
+                self.test_status.setText("内置模型完整，可离线使用")
+            else:
+                self.test_status.setText(f"连接成功 · 发现 {len(models)} 个模型")
             self.test_status.setProperty("ok", True)
         self.test_status.style().unpolish(self.test_status)
         self.test_status.style().polish(self.test_status)
@@ -397,12 +410,12 @@ class MingJianWindow(QMainWindow):
         privacy_layout.setSpacing(4)
         privacy_title = QLabel("本地处理")
         privacy_title.setObjectName("privacyTitle")
-        privacy_body = QLabel("材料只在本机解析\n无需账户与网络连接")
+        privacy_body = QLabel("内置模型本机推理\n无需账户与网络连接")
         privacy_body.setObjectName("privacyBody")
         privacy_layout.addWidget(privacy_title)
         privacy_layout.addWidget(privacy_body)
         layout.addWidget(privacy)
-        version = QLabel("v0.5  ·  Zero-config Desktop")
+        version = QLabel("DESKTOP · LOCAL AI")
         version.setObjectName("version")
         layout.addWidget(version)
         return sidebar
@@ -557,12 +570,24 @@ class MingJianWindow(QMainWindow):
         event.acceptProposedAction()
 
     def _load_model_config(self) -> ModelConfig:
-        provider = str(self.settings.value("model/provider", "openai"))
+        schema_version = int(self.settings.value("model/schema_version", 0))
+        provider = str(self.settings.value("model/provider", "embedded"))
+        if provider not in {"embedded", "openai", "ollama"}:
+            provider = "embedded"
+        enabled = self.settings.value("model/enabled", True, type=bool)
+        base_url = str(self.settings.value("model/base_url", ""))
+        model_name = str(self.settings.value("model/name", "Qwen2.5-0.5B-Instruct Q4_K_M"))
+        if schema_version < 2 and not (enabled and provider != "embedded" and base_url and model_name):
+            provider = "embedded"
+            enabled = True
+            base_url = ""
+            model_name = "Qwen2.5-0.5B-Instruct Q4_K_M"
+            self.settings.setValue("model/schema_version", 2)
         return ModelConfig(
-            enabled=self.settings.value("model/enabled", False, type=bool),
-            provider="ollama" if provider == "ollama" else "openai",
-            base_url=str(self.settings.value("model/base_url", "https://api.openai.com/v1")),
-            model=str(self.settings.value("model/name", "")),
+            enabled=enabled,
+            provider=provider,
+            base_url=base_url,
+            model=model_name,
             api_key=str(self.settings.value("model/api_key", "")),
         )
 
@@ -571,7 +596,7 @@ class MingJianWindow(QMainWindow):
         if dialog.exec() != QDialog.DialogCode.Accepted:
             return
         config = dialog.config()
-        if config.enabled and (not config.base_url or not config.model):
+        if config.enabled and config.provider != "embedded" and (not config.base_url or not config.model):
             QMessageBox.warning(self, "模型配置不完整", "启用模型增强时，请填写接口地址和模型名称。")
             return
         self.model_config = config
@@ -580,12 +605,19 @@ class MingJianWindow(QMainWindow):
         self.settings.setValue("model/base_url", config.base_url)
         self.settings.setValue("model/name", config.model)
         self.settings.setValue("model/api_key", config.api_key)
+        self.settings.setValue("model/schema_version", 2)
         self._update_model_button()
-        self.status_label.setText("模型增强已启用；下次审查自动调用接口" if config.enabled else "已切换为零配置内置规则审查")
+        if config.enabled and config.provider == "embedded":
+            self.status_label.setText("已启用内置模型，下次审查将在本机完成推理")
+        elif config.enabled:
+            self.status_label.setText("已启用外部模型接口，下次审查会自动调用")
+        else:
+            self.status_label.setText("AI 已关闭，将使用内置规则审查")
 
     def _update_model_button(self) -> None:
         if self.model_config.enabled:
-            self.model_button.setText(f"AI · {self.model_config.model or '已启用'}")
+            label = "内置模型" if self.model_config.provider == "embedded" else (self.model_config.model or "已启用")
+            self.model_button.setText(f"AI · {label}")
             self.model_button.setProperty("enabled", True)
         else:
             self.model_button.setText("模型接口 · 可选")
@@ -949,7 +981,7 @@ QDialogButtonBox QPushButton:hover {{ border-color: {COLORS['accent']}; }}
 def main() -> None:
     app = QApplication(sys.argv)
     app.setApplicationName("明鉴")
-    app.setApplicationVersion("0.5.0")
+    app.setApplicationVersion("0.6.0")
     app.setWindowIcon(QIcon(str(resource_path("assets/mingjian-v2.ico"))))
     palette = QPalette()
     palette.setColor(QPalette.ColorRole.Window, QColor(COLORS["app"]))
