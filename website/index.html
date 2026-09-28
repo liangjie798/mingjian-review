@@ -4,20 +4,21 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="明鉴是一款内置本地 AI 的 Windows 材料审查工具，覆盖合同与大学生竞赛材料。">
-  <meta name="theme-color" content="#0b0e0d">
+  <meta name="theme-color" content="#090c0b">
   <title>明鉴 | 本地 AI 材料审查工具</title>
   <link rel="icon" href="assets/mingjian-icon-v2.png">
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
+  <div class="scroll-progress" aria-hidden="true"></div>
   <header class="site-header">
     <a class="brand" href="#top" aria-label="明鉴首页">
       <img src="assets/mingjian-icon-v2.png" alt="" width="38" height="38">
       <span>明鉴</span>
     </a>
     <nav aria-label="主导航">
-      <a href="#capabilities">能力</a>
-      <a href="#local-ai">本地 AI</a>
+      <a href="#scenarios">审查场景</a>
+      <a href="#local-ai">模型能力</a>
       <a href="#workflow">使用方法</a>
       <a href="https://github.com/liangjie798/mingjian-review" target="_blank" rel="noreferrer">GitHub</a>
     </nav>
@@ -26,107 +27,117 @@
 
   <main id="top">
     <section class="hero section-shell">
-      <div class="hero-copy reveal">
-        <p class="eyebrow"><span></span> LOCAL AI DOCUMENT REVIEW</p>
-        <h1>把一叠材料，变成可以处理的结论。</h1>
-        <p class="hero-lead">明鉴在 Windows 本机完成文件解析、规则检查和 AI 语义审查。打开软件，拖入材料，问题与原文证据会自动排好。</p>
+      <div class="hero-copy">
+        <p class="eyebrow hero-eyebrow"><span></span> LOCAL AI DOCUMENT REVIEW</p>
+        <h1><span>把复杂材料，</span><span>变成清晰结论。</span></h1>
+        <p class="hero-lead">文件解析、规则核验和 AI 语义审查全部集中在一个桌面工具里。打开软件，拖入材料，问题与原文证据会自动排好。</p>
         <div class="hero-actions">
           <a class="primary-action" href="https://github.com/liangjie798/mingjian-review/releases/latest/download/MingJian-AI.exe">免费下载 EXE <span>↗</span></a>
-          <a class="text-action" href="#workflow">查看怎么使用</a>
+          <a class="text-action" href="#workflow">查看使用流程</a>
         </div>
         <div class="trust-row" aria-label="产品信息">
-          <span>Windows 10 / 11</span>
-          <span>无需登录</span>
-          <span>模型已内置</span>
+          <span>Windows 10 / 11</span><span>无需登录</span><span>模型已内置</span>
         </div>
       </div>
-      <figure class="hero-visual reveal">
+      <figure class="hero-visual media-frame">
         <img src="assets/hero-review-illustration.webp" alt="文件经过审查后形成清晰结论的抽象插画" width="1536" height="1024">
-        <figcaption><span>01</span> 从原始材料到可验证结论</figcaption>
+        <figcaption><span>01</span><span>从原始材料到可验证结论</span></figcaption>
       </figure>
+      <div class="hero-marker" aria-hidden="true">SCROLL<br>TO REVIEW</div>
     </section>
 
-    <section class="statement section-shell reveal" id="capabilities">
-      <p class="section-index">01 / 能力</p>
-      <p class="statement-text">规则负责确定性检查，AI 负责理解上下文。每个结论都回到文件、页码和原文片段。</p>
-    </section>
-
-    <section class="capability-grid section-shell">
-      <article class="capability capability-main reveal">
-        <div class="capability-number">A</div>
-        <div>
-          <p class="kicker">竞赛材料</p>
-          <h2>先找齐，再找对。</h2>
-          <p>检查申报书、承诺书、项目计划书和团队信息，识别缺失材料、成员异常与跨文件冲突。</p>
-        </div>
-        <ul>
-          <li>材料完整性</li>
-          <li>团队与指导教师</li>
-          <li>名称、日期、金额一致性</li>
-        </ul>
-      </article>
-      <article class="capability reveal">
-        <div class="capability-number">B</div>
-        <p class="kicker">合同材料</p>
-        <h2>让风险有原文。</h2>
-        <p>定位付款比例、验收期限、违约责任等条款问题，并给出可执行的修改方向。</p>
-      </article>
-      <article class="capability metric-block reveal">
-        <p class="metric">7</p>
-        <p>种常见文档格式</p>
-        <small>PDF · DOCX · XLSX · TXT · MD · CSV · JSON</small>
-      </article>
-    </section>
-
-    <section class="local-ai section-shell" id="local-ai">
-      <div class="local-copy reveal">
-        <p class="section-index">02 / 本地 AI</p>
-        <h2>模型就在软件里。</h2>
-        <p>内置 Qwen2.5 0.5B 指令模型与 llama.cpp 推理运行时。首次打开即可使用，无需安装 Python、配置服务或填写 API Key。</p>
-        <dl>
-          <div><dt>默认模式</dt><dd>离线、本机 CPU 推理</dd></div>
-          <div><dt>隐私</dt><dd>材料不上传到第三方接口</dd></div>
-          <div><dt>扩展</dt><dd>可切换 OpenAI 兼容接口或 Ollama</dd></div>
-        </dl>
+    <section class="manifesto section-shell" data-reveal>
+      <p class="section-index">01 / 方法</p>
+      <p class="manifesto-copy">规则检查确定的事实，AI 理解材料的上下文。每一条结论，都能回到文件、页码和原文。</p>
+      <div class="manifesto-stats">
+        <div><strong>7</strong><span>种文件格式</span></div>
+        <div><strong>2</strong><span>个审查场景</span></div>
+        <div><strong>0</strong><span>项启动配置</span></div>
       </div>
-      <div class="model-orbit reveal" aria-label="内置模型架构示意">
-        <div class="orbit-ring ring-one"></div>
-        <div class="orbit-ring ring-two"></div>
-        <div class="model-core">
-          <span>BUILT IN</span>
-          <strong>QWEN</strong>
-          <small>LOCAL INFERENCE</small>
+    </section>
+
+    <section class="scenarios section-shell" id="scenarios">
+      <article class="story story-competition">
+        <figure class="story-visual media-frame" data-reveal>
+          <img src="assets/competition-review.webp" alt="大学生竞赛申报材料智能核验插画" width="1456" height="1092">
+          <figcaption><span>A / COMPETITION</span><span>材料完整性与一致性</span></figcaption>
+        </figure>
+        <div class="story-copy" data-reveal>
+          <p class="section-index">竞赛材料审查</p>
+          <h2>先找齐，再找对。</h2>
+          <p>检查申报书、承诺书、项目计划书和团队信息。系统会把缺失材料、人数异常和跨文件冲突集中呈现。</p>
+          <ul class="detail-list">
+            <li><span>01</span>必交材料与文件格式</li>
+            <li><span>02</span>成员、指导教师和学校信息</li>
+            <li><span>03</span>名称、日期与金额一致性</li>
+          </ul>
         </div>
-        <span class="orbit-label label-a">RULES</span>
-        <span class="orbit-label label-b">EVIDENCE</span>
-        <span class="orbit-label label-c">CONTEXT</span>
+      </article>
+
+      <article class="story story-contract">
+        <div class="story-copy" data-reveal>
+          <p class="section-index">合同材料审查</p>
+          <h2>让风险带着证据出现。</h2>
+          <p>定位付款比例、验收期限、违约责任和关键义务。结论附带原文片段，修改建议可以直接交给经办人。</p>
+          <ul class="detail-list">
+            <li><span>01</span>付款节点与比例核验</li>
+            <li><span>02</span>验收、交付和期限风险</li>
+            <li><span>03</span>责任条款与缺失内容</li>
+          </ul>
+        </div>
+        <figure class="story-visual media-frame" data-reveal>
+          <img src="assets/contract-review.webp" alt="合同条款与风险证据审查插画" width="1456" height="1092">
+          <figcaption><span>B / CONTRACT</span><span>条款风险与原文证据</span></figcaption>
+        </figure>
+      </article>
+    </section>
+
+    <section class="local-ai" id="local-ai">
+      <div class="section-shell local-heading" data-reveal>
+        <p class="section-index">02 / 模型能力</p>
+        <h2>内置模型开箱即用，也能连接你已有的大模型。</h2>
+      </div>
+      <div class="section-shell model-stage">
+        <figure class="ecosystem-visual media-frame" data-reveal>
+          <img src="assets/model-ecosystem.webp" alt="本地模型与多种云端大模型服务连接的抽象插画" width="1680" height="945">
+          <div class="provider-cloud" aria-label="支持的模型接口">
+            <span>OpenAI</span><span>Claude</span><span>Gemini</span><span>DeepSeek</span>
+            <span>通义千问</span><span>智谱 GLM</span><span>Kimi</span><span>豆包</span>
+            <span>硅基流动</span><span>OpenRouter</span><span>Ollama</span><span>自定义兼容接口</span>
+          </div>
+        </figure>
+        <div class="model-notes">
+          <article data-reveal><span>LOCAL</span><h3>默认离线</h3><p>Qwen2.5 模型和 llama.cpp 已装进 EXE，无需账号和 API Key。</p></article>
+          <article data-reveal><span>UNIVERSAL</span><h3>多协议适配</h3><p>支持 OpenAI 兼容协议、Anthropic Messages、Gemini generateContent 和 Ollama。</p></article>
+          <article data-reveal><span>CONTROL</span><h3>随时切换</h3><p>服务地址、模型名称和密钥都可以在软件内配置，内置模型始终可用。</p></article>
+        </div>
       </div>
     </section>
 
     <section class="workflow section-shell" id="workflow">
-      <div class="workflow-heading reveal">
+      <div class="workflow-heading" data-reveal>
         <p class="section-index">03 / 使用方法</p>
-        <h2>三步完成一次审查。</h2>
+        <h2>三步，完成一次材料审查。</h2>
       </div>
-      <figure class="workflow-visual reveal">
+      <figure class="workflow-visual media-frame" data-reveal>
         <img src="assets/workflow-illustration.webp" alt="文件扫描、证据提取和风险结论的流程插画" width="1680" height="945">
       </figure>
       <ol class="steps">
-        <li class="reveal"><span>01</span><strong>选择场景</strong><p>进入竞赛材料或合同审查。</p></li>
-        <li class="reveal"><span>02</span><strong>拖入文件</strong><p>软件自动解析并立即开始审查。</p></li>
-        <li class="reveal"><span>03</span><strong>处理结论</strong><p>查看证据、整改并导出报告。</p></li>
+        <li data-reveal><span>01</span><strong>选择场景</strong><p>进入竞赛材料或合同审查。</p></li>
+        <li data-reveal><span>02</span><strong>拖入文件</strong><p>软件自动解析并开始审查。</p></li>
+        <li data-reveal><span>03</span><strong>处理结论</strong><p>查看证据、整改并导出报告。</p></li>
       </ol>
     </section>
 
     <section class="download-band">
-      <div class="section-shell download-inner reveal">
+      <div class="section-shell download-inner" data-reveal>
         <p class="eyebrow"><span></span> READY ON WINDOWS</p>
         <h2>现在，把材料交给明鉴。</h2>
         <p>下载后双击运行。模型、规则和文档解析能力已经包含在软件中。</p>
         <a class="primary-action light" href="https://github.com/liangjie798/mingjian-review/releases/latest/download/MingJian-AI.exe">下载 Windows 版 <span>↓</span></a>
         <div class="download-meta">
           <span>64 位 Windows</span>
-          <a href="https://github.com/liangjie798/mingjian-review/releases/latest" target="_blank" rel="noreferrer">版本与校验信息</a>
+          <a href="https://github.com/liangjie798/mingjian-review/releases/latest" target="_blank" rel="noreferrer">版本与 SHA-256 校验信息</a>
         </div>
       </div>
     </section>
@@ -137,6 +148,8 @@
     <p>本地 AI 材料审查工具</p>
     <a href="https://github.com/liangjie798/mingjian-review" target="_blank" rel="noreferrer">源代码与开发文档 ↗</a>
   </footer>
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/gsap.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.13.0/dist/ScrollTrigger.min.js"></script>
   <script src="script.js"></script>
 </body>
 </html>

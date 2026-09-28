@@ -73,6 +73,22 @@ SCENARIOS = {
     },
 }
 
+MODEL_PROVIDERS = {
+    "embedded": ("内置 Qwen2.5 0.5B", "", "Qwen2.5-0.5B-Instruct Q4_K_M"),
+    "openai": ("OpenAI", "https://api.openai.com/v1", "gpt-4.1-mini"),
+    "anthropic": ("Anthropic Claude", "https://api.anthropic.com/v1", "claude-sonnet-4-5"),
+    "gemini": ("Google Gemini", "https://generativelanguage.googleapis.com/v1beta", "gemini-2.5-flash"),
+    "deepseek": ("DeepSeek", "https://api.deepseek.com/v1", "deepseek-chat"),
+    "dashscope": ("阿里云百炼 / 通义千问", "https://dashscope.aliyuncs.com/compatible-mode/v1", "qwen-plus"),
+    "zhipu": ("智谱 GLM", "https://open.bigmodel.cn/api/paas/v4", "glm-4-flash"),
+    "moonshot": ("Moonshot / Kimi", "https://api.moonshot.cn/v1", "moonshot-v1-8k"),
+    "siliconflow": ("硅基流动", "https://api.siliconflow.cn/v1", "Qwen/Qwen3-8B"),
+    "volcengine": ("火山方舟 / 豆包", "https://ark.cn-beijing.volces.com/api/v3", ""),
+    "openrouter": ("OpenRouter", "https://openrouter.ai/api/v1", "qwen/qwen3-8b"),
+    "ollama": ("Ollama 本地模型", "http://127.0.0.1:11434", "qwen3:4b"),
+    "custom": ("其他 OpenAI 兼容服务", "", ""),
+}
+
 
 def resource_path(relative: str) -> Path:
     base = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
@@ -207,7 +223,7 @@ class ModelSettingsDialog(QDialog):
         layout.setSpacing(15)
         title = QLabel("审查模型")
         title.setObjectName("dialogTitle")
-        description = QLabel("软件已内置 Qwen2.5 模型，可离线完成智能审查。高级用户也可以切换到自己的 OpenAI 兼容接口或 Ollama。")
+        description = QLabel("默认使用内置 Qwen2.5 离线审查。也可连接 OpenAI、Claude、Gemini、DeepSeek、通义千问、智谱、Kimi、豆包、硅基流动、OpenRouter、Ollama 或其他兼容服务。")
         description.setObjectName("dialogDescription")
         description.setWordWrap(True)
         layout.addWidget(title)
@@ -218,15 +234,14 @@ class ModelSettingsDialog(QDialog):
         self.enabled = QCheckBox("启用 AI 智能审查")
         self.enabled.setChecked(config.enabled)
         self.provider = QComboBox()
-        self.provider.addItem("内置 Qwen2.5 0.5B", "embedded")
-        self.provider.addItem("OpenAI 兼容接口", "openai")
-        self.provider.addItem("Ollama 本地模型", "ollama")
-        provider_indexes = {"embedded": 0, "openai": 1, "ollama": 2}
-        self.provider.setCurrentIndex(provider_indexes.get(config.provider, 0))
+        for provider_id, (label, _, _) in MODEL_PROVIDERS.items():
+            self.provider.addItem(label, provider_id)
+        provider_index = self.provider.findData(config.provider)
+        self.provider.setCurrentIndex(max(0, provider_index))
         self.base_url = QLineEdit(config.base_url)
         self.model = QComboBox()
         self.model.setEditable(True)
-        self.model.addItems(["qwen3.5:4b", "qwen3.5:9b", "deepseek-r1:7b"])
+        self.model.addItems([preset[2] for preset in MODEL_PROVIDERS.values() if preset[2]])
         self.model.setCurrentText(config.model)
         self.api_key = QLineEdit(config.api_key)
         self.api_key.setEchoMode(QLineEdit.EchoMode.Password)
@@ -238,7 +253,7 @@ class ModelSettingsDialog(QDialog):
         form.addRow("API Key", self.api_key)
         layout.addLayout(form)
 
-        note = QLabel("使用内置模型时，文件和模型推理都留在本机。外部接口的密钥仅保存在当前 Windows 用户配置中。")
+        note = QLabel("内置模型完全在本机运行。外部接口会把抽取后的材料文本发送给所选服务商，API Key 仅保存在当前 Windows 用户配置中。")
         note.setObjectName("settingsNote")
         note.setWordWrap(True)
         layout.addWidget(note)
@@ -256,23 +271,23 @@ class ModelSettingsDialog(QDialog):
         buttons.accepted.connect(self.accept)
         buttons.rejected.connect(self.reject)
         layout.addWidget(buttons)
-        self.provider.currentIndexChanged.connect(self._provider_changed)
-        self._provider_changed()
+        self.provider.currentIndexChanged.connect(lambda _index: self._provider_changed(apply_defaults=True))
+        self._provider_changed(apply_defaults=False)
 
-    def _provider_changed(self) -> None:
-        is_embedded = self.provider.currentData() == "embedded"
-        is_ollama = self.provider.currentData() == "ollama"
+    def _provider_changed(self, apply_defaults: bool = True) -> None:
+        provider_id = self.provider.currentData()
+        is_embedded = provider_id == "embedded"
+        is_ollama = provider_id == "ollama"
         self.base_url.setEnabled(not is_embedded)
         self.model.setEnabled(not is_embedded)
         self.api_key.setEnabled(not is_embedded and not is_ollama)
+        self.api_key.setPlaceholderText("本地模型无需填写" if is_ollama else "输入所选服务商的 API Key")
+        if apply_defaults:
+            _, default_url, default_model = MODEL_PROVIDERS[provider_id]
+            self.base_url.setText(default_url)
+            self.model.setCurrentText(default_model)
         if is_embedded:
-            self.base_url.clear()
-            self.model.setCurrentText("Qwen2.5-0.5B-Instruct Q4_K_M")
             self.api_key.clear()
-            return
-        known = {"", "http://127.0.0.1:11434", "https://api.openai.com/v1"}
-        if self.base_url.text().strip() in known:
-            self.base_url.setText("http://127.0.0.1:11434" if is_ollama else "https://api.openai.com/v1")
 
     def config(self) -> ModelConfig:
         return ModelConfig(
@@ -572,7 +587,7 @@ class MingJianWindow(QMainWindow):
     def _load_model_config(self) -> ModelConfig:
         schema_version = int(self.settings.value("model/schema_version", 0))
         provider = str(self.settings.value("model/provider", "embedded"))
-        if provider not in {"embedded", "openai", "ollama"}:
+        if provider not in MODEL_PROVIDERS:
             provider = "embedded"
         enabled = self.settings.value("model/enabled", True, type=bool)
         base_url = str(self.settings.value("model/base_url", ""))
@@ -616,8 +631,9 @@ class MingJianWindow(QMainWindow):
 
     def _update_model_button(self) -> None:
         if self.model_config.enabled:
-            label = "内置模型" if self.model_config.provider == "embedded" else (self.model_config.model or "已启用")
+            label = "内置模型" if self.model_config.provider == "embedded" else MODEL_PROVIDERS.get(self.model_config.provider, ("自定义模型", "", ""))[0]
             self.model_button.setText(f"AI · {label}")
+            self.model_button.setToolTip(self.model_config.model)
             self.model_button.setProperty("enabled", True)
         else:
             self.model_button.setText("模型接口 · 可选")
@@ -981,7 +997,7 @@ QDialogButtonBox QPushButton:hover {{ border-color: {COLORS['accent']}; }}
 def main() -> None:
     app = QApplication(sys.argv)
     app.setApplicationName("明鉴")
-    app.setApplicationVersion("0.6.0")
+    app.setApplicationVersion("0.7.0")
     app.setWindowIcon(QIcon(str(resource_path("assets/mingjian-v2.ico"))))
     palette = QPalette()
     palette.setColor(QPalette.ColorRole.Window, QColor(COLORS["app"]))

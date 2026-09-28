@@ -12,8 +12,17 @@ from pathlib import Path
 from typing import Any, Literal
 
 
-Provider = Literal["embedded", "openai", "ollama"]
+Provider = Literal[
+    "embedded", "openai", "deepseek", "siliconflow", "dashscope",
+    "zhipu", "moonshot", "volcengine", "openrouter", "anthropic",
+    "gemini", "ollama", "custom",
+]
 Scenario = Literal["competition", "contract"]
+
+OPENAI_COMPATIBLE_PROVIDERS = {
+    "openai", "deepseek", "siliconflow", "dashscope", "zhipu",
+    "moonshot", "volcengine", "openrouter", "custom",
+}
 
 
 @dataclass(slots=True)
@@ -26,12 +35,20 @@ class ModelConfig:
     timeout: int = 180
 
 
-def _json_request(url: str, timeout: int, payload: dict[str, Any] | None = None, api_key: str = "") -> Any:
+def _json_request(
+    url: str,
+    timeout: int,
+    payload: dict[str, Any] | None = None,
+    api_key: str = "",
+    headers: dict[str, str] | None = None,
+) -> Any:
     data = json.dumps(payload).encode("utf-8") if payload is not None else None
     request = urllib.request.Request(url, data=data)
     request.add_header("Content-Type", "application/json")
     if api_key:
         request.add_header("Authorization", f"Bearer {api_key}")
+    for name, value in (headers or {}).items():
+        request.add_header(name, value)
     try:
         with urllib.request.urlopen(request, timeout=timeout) as response:
             return json.loads(response.read().decode("utf-8"))
@@ -52,6 +69,18 @@ def list_models(config: ModelConfig) -> list[str]:
     if config.provider == "ollama":
         response = _json_request(f"{base}/api/tags", min(config.timeout, 8))
         return [item.get("name", "") for item in response.get("models", []) if item.get("name")]
+    if config.provider == "anthropic":
+        response = _json_request(
+            f"{base}/models", min(config.timeout, 8),
+            headers={"x-api-key": config.api_key, "anthropic-version": "2023-06-01"},
+        )
+        return [item.get("id", "") for item in response.get("data", []) if item.get("id")]
+    if config.provider == "gemini":
+        response = _json_request(
+            f"{base}/models", min(config.timeout, 8),
+            headers={"x-goog-api-key": config.api_key},
+        )
+        return [str(item.get("name", "")).removeprefix("models/") for item in response.get("models", []) if item.get("name")]
     response = _json_request(f"{base}/models", min(config.timeout, 8), api_key=config.api_key)
     return [item.get("id", "") for item in response.get("data", []) if item.get("id")]
 
@@ -68,6 +97,34 @@ def _chat(config: ModelConfig, messages: list[dict[str, str]]) -> str:
              "options": {"temperature": 0.1, "num_ctx": 32768}},
         )
         return str(response.get("message", {}).get("content", ""))
+    if config.provider == "anthropic":
+        system = "\n\n".join(item["content"] for item in messages if item["role"] == "system")
+        conversation = [item for item in messages if item["role"] != "system"]
+        response = _json_request(
+            f"{base}/messages",
+            config.timeout,
+            {"model": config.model, "max_tokens": 1200, "temperature": 0.1,
+             "system": system, "messages": conversation},
+            headers={"x-api-key": config.api_key, "anthropic-version": "2023-06-01"},
+        )
+        return "".join(str(item.get("text", "")) for item in response.get("content", []) if item.get("type") == "text")
+    if config.provider == "gemini":
+        system = "\n\n".join(item["content"] for item in messages if item["role"] == "system")
+        contents = [
+            {"role": "model" if item["role"] == "assistant" else "user",
+             "parts": [{"text": item["content"]}]}
+            for item in messages if item["role"] != "system"
+        ]
+        response = _json_request(
+            f"{base}/models/{config.model}:generateContent",
+            config.timeout,
+            {"systemInstruction": {"parts": [{"text": system}]}, "contents": contents,
+             "generationConfig": {"temperature": 0.1, "responseMimeType": "application/json"}},
+            headers={"x-goog-api-key": config.api_key},
+        )
+        candidates = response.get("candidates", [])
+        parts = candidates[0].get("content", {}).get("parts", []) if candidates else []
+        return "".join(str(item.get("text", "")) for item in parts)
     response = _json_request(
         f"{base}/chat/completions",
         config.timeout,

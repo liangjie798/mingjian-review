@@ -5,6 +5,7 @@
 - 桌面 UI：PySide6
 - 文件解析：PyMuPDF、python-docx、openpyxl
 - 本地推理：Qwen2.5 GGUF + llama.cpp
+- 云端模型：OpenAI 兼容协议、Anthropic Messages API、Gemini generateContent API
 - 打包：PyInstaller 单文件模式
 - 官网：原生 HTML、CSS、JavaScript，由 GitHub Pages 发布
 
