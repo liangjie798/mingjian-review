@@ -9,12 +9,12 @@
 - 风险分级、原文证据和整改建议；
 - 问题销项及重新审查交互；
 - PDF、DOCX、XLSX和文本文件本地解析；
-- FastAPI上传与审查接口；
+- 原生Windows工作台与多线程审查；
 - 可插拔场景包示例。
 
 ## 直接运行
 
-双击`dist/MingJian.exe`。程序会启动本地服务并打开桌面窗口，不需要单独安装Python或Node.js。
+双击`dist/MingJian.exe`。程序直接打开原生桌面工作台，不启动浏览器、本地Web服务或监听端口，也不需要单独安装Python或Node.js。
 
 ## 产品官网
 
@@ -30,22 +30,11 @@ npx vite website
 
 ## 本地运行
 
-前端：
-
-```powershell
-npm install
-npm run dev
-```
-
-后端：
-
 ```powershell
 py -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r backend\requirements.txt
-.\.venv\Scripts\python.exe -m uvicorn backend.app:app --reload
+.\.venv\Scripts\python.exe -m pip install -r requirements-desktop.txt
+.\.venv\Scripts\python.exe desktop.py
 ```
-
-访问 `http://localhost:5173`，接口文档位于 `http://127.0.0.1:8000/docs`。
 
 ## 说明
 

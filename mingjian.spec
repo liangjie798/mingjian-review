@@ -1,23 +1,19 @@
 # -*- mode: python ; coding: utf-8 -*-
 
-from PyInstaller.utils.hooks import collect_submodules
+from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 
-hiddenimports = collect_submodules("webview") + collect_submodules("uvicorn")
+hiddenimports = collect_submodules("customtkinter")
 
 a = Analysis(
     ["desktop.py"],
     pathex=[],
     binaries=[],
-    datas=[
-        ("dist/index.html", "dist"),
-        ("dist/assets", "dist/assets"),
-        ("scenario-packs", "scenario-packs"),
-    ],
+    datas=collect_data_files("customtkinter") + [("scenario-packs", "scenario-packs"), ("assets/mingjian.ico", "assets")],
     hiddenimports=hiddenimports,
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=[],
+    excludes=["fastapi", "uvicorn", "webview", "starlette", "pydantic"],
     noarchive=False,
     optimize=0,
 )
@@ -40,4 +36,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
+    icon="assets/mingjian.ico",
 )

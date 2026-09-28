@@ -2,11 +2,11 @@
 
 ## 1. 当前版本
 
-- 版本：0.2.0 MVP
+- 版本：0.3.0 Native Desktop
 - 平台：Windows 10/11 x64
-- 桌面框架：PyWebView + 本地FastAPI服务
-- 前端：React 19 + TypeScript + Vite
-- 后端：Python 3.13 + FastAPI + Pydantic
+- 桌面框架：CustomTkinter原生窗口
+- 审查引擎：Python 3.13纯本地模块
+- 官网：独立HTML、CSS和JavaScript静态站点
 - 打包：PyInstaller单文件模式
 - 当前产物：`dist/MingJian.exe`
 
@@ -30,38 +30,32 @@
 ## 3. 系统架构
 
 ```text
-PyWebView桌面窗口
-        │
+CustomTkinter原生工作台
+        │ Python函数调用
         ▼
-React静态页面
-        │ HTTP / multipart
-        ▼
-FastAPI本地服务
+本地审查引擎
         ├── 文件格式路由
         ├── PDF / Word / Excel解析
         ├── 竞赛规则执行器
         ├── 合同规则执行器
-        └── Evidence / Finding结构化响应
+        └── Evidence / Finding结构化结果
 ```
 
-桌面程序只监听`127.0.0.1`。默认端口为8765，端口被占用时自动选择空闲端口。
+桌面程序不启动HTTP服务、不打开WebView，也不监听本地端口。界面线程只负责交互，文件解析和规则执行放在后台线程，避免审查大文件时阻塞窗口。
 
 ## 4. 目录结构
 
 ```text
 .
-├── src/                       React界面
-│   ├── App.tsx                场景首页、工作台和文件上传
-│   ├── data.ts                内置演示数据
-│   ├── types.ts               前端类型
-│   └── styles.css             视觉系统和响应式布局
 ├── backend/
-│   ├── app.py                 API、解析器和规则执行器
-│   └── requirements.txt       固定Python依赖
+│   ├── review_engine.py       文件解析、规则与统一结果模型
+│   └── app.py                 保留的开发期API适配层
 ├── scenario-packs/
 │   ├── competition/           竞赛场景配置
 │   └── contract/              合同场景配置
-├── desktop.py                 桌面窗口与本地服务启动器
+├── assets/                    应用图标
+├── desktop.py                 原生桌面工作台
+├── requirements-desktop.txt  桌面构建依赖
 ├── mingjian.spec              PyInstaller构建配置
 ├── build.ps1                  一键构建脚本
 ├── DEV_STEPS.md               后续开发路线
@@ -73,35 +67,20 @@ FastAPI本地服务
 
 ### 环境要求
 
-- Node.js 22或兼容版本；
 - Python 3.13；
-- Windows WebView2 Runtime。Windows 10/11通常已安装。
+- Windows 10或Windows 11。
 
-### 前端开发
-
-```powershell
-npm install
-npm run dev
-```
-
-### 后端开发
+### 桌面端开发
 
 ```powershell
 py -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r backend\requirements.txt
-.\.venv\Scripts\python.exe -m uvicorn backend.app:app --reload
-```
-
-前端开发地址为`http://localhost:5173`，后端文档为`http://127.0.0.1:8000/docs`。
-
-### 生产模式源码运行
-
-```powershell
-npm run build
+.\.venv\Scripts\python.exe -m pip install -r requirements-desktop.txt
 .\.venv\Scripts\python.exe desktop.py
 ```
 
-## 6. API
+## 6. 可选开发API
+
+`backend/app.py`保留FastAPI适配层，供接口实验和自动化调用使用。它不会被打包进桌面EXE，也不会随桌面程序启动。
 
 ### 健康检查
 
@@ -156,9 +135,9 @@ files=<一个或多个文件>
 ## 8. 新增场景
 
 1. 在`scenario-packs/<场景名>/`增加`manifest.json`和`default-rules.json`。
-2. 在后端增加场景审查函数，输入统一为`list[tuple[str, list[str]]]`。
+2. 在`backend/review_engine.py`增加场景审查函数，输入统一为`list[tuple[str, list[str]]]`。
 3. 输出统一使用`Finding`，且至少包含一条`Evidence`。
-4. 在`src/data.ts`注册场景卡片。
+4. 在`desktop.py`的`SCENARIOS`中注册场景入口。
 5. 增加一个正确样本和至少三个错误样本。
 
 后续应将当前Python函数式规则迁移为通用操作符，例如`required_document`、`regex_extract`、`between`、`equals_across_documents`和`sum_equals`。
@@ -173,42 +152,30 @@ files=<一个或多个文件>
 
 脚本会：
 
-1. 使用`npm ci`恢复前端依赖；
-2. 执行TypeScript检查和Vite生产构建；
-3. 创建`.venv`并安装固定Python依赖；
-4. 使用`mingjian.spec`生成单文件EXE；
-5. 计算SHA-256并写入校验文件。
+1. 创建`.venv`并安装`requirements-desktop.txt`；
+2. 使用`mingjian.spec`生成单文件EXE；
+3. 嵌入CustomTkinter主题、应用图标和场景包；
+4. 计算SHA-256并写入校验文件；
+5. 将EXE和校验文件同步到官网的下载目录。
 
-PyInstaller配置只嵌入`dist/index.html`、`dist/assets`和`scenario-packs`，避免将旧EXE再次嵌入新EXE。
+PyInstaller明确排除FastAPI、Uvicorn、PyWebView、Starlette和Pydantic，桌面产物不包含Web运行时。
 
 ## 10. 验证
 
-构建后可用服务模式验证，不打开桌面窗口：
-
-```powershell
-.\dist\MingJian.exe --server-only --port 8877
-```
-
-另一个终端执行：
-
-```powershell
-Invoke-RestMethod http://127.0.0.1:8877/api/health
-```
-
 本次构建已验证：
 
-- 前端生产构建通过；
-- EXE健康接口返回`ok`；
-- EXE内嵌首页返回HTTP 200；
-- multipart文件上传成功；
-- 竞赛和合同规则均返回结构化Finding。
+- 原生窗口可独立启动；
+- EXE进程没有监听TCP端口；
+- 竞赛和合同规则均返回结构化Finding；
+- 材料列表、风险详情、问题销项与文本报告导出可用；
+- 官网下载文件与`dist/MingJian.exe`的SHA-256一致。
 
 ## 11. 已知限制
 
 - 当前PDF解析只支持带文字层的原生PDF；扫描PDF需要后续接入PaddleOCR。
 - 当前没有接入大模型，规则抽取和语义审查使用内置演示逻辑。
 - DOC旧格式、XLS旧格式和图片尚未支持。
-- 页面预览是证据模拟视图，尚未根据PDF坐标绘制真实高亮框。
+- 当前展示文本证据片段，尚未根据PDF坐标绘制真实页面高亮框。
 - EXE未进行代码签名，Windows可能显示未知发布者提示。
 - 未实现项目持久化、版本管理和PDF报告导出。
 

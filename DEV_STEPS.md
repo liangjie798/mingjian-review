@@ -124,17 +124,14 @@
 
 ## 9. 阶段六：桌面打包
 
-优先采用`React + FastAPI + PyWebView + PyInstaller`：
+采用`CustomTkinter + Python审查引擎 + PyInstaller`：
 
-1. React构建为静态文件。
-2. FastAPI提供本地API和静态资源。
-3. PyWebView打开本地应用窗口。
-4. PyInstaller打包Python、解析器和启动器。
-5. 关闭窗口时清理本地服务进程。
-6. 生成安装版与免安装ZIP。
-7. 输出SHA-256校验值。
-
-打包前先确保Web源码能够独立运行，避免EXE成为唯一复现方式。
+1. 原生窗口直接调用Python审查函数。
+2. 文件解析与规则执行放入后台线程。
+3. PyInstaller打包窗口、解析器、主题和应用图标。
+4. 明确排除FastAPI、Uvicorn和PyWebView。
+5. 生成免安装单文件EXE。
+6. 输出SHA-256校验值并同步官网文件。
 
 ## 10. 阶段七：官网与发布
 

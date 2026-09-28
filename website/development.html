@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#070908" />
-    <link rel="icon" href="data:," />
+    <link rel="icon" type="image/png" href="./assets/mingjian-icon.png" />
     <meta name="description" content="明鉴桌面端技术架构、文件支持和开发说明。" />
     <title>开发文档 · 明鉴</title>
     <link rel="stylesheet" href="./styles.css" />
@@ -40,7 +40,7 @@
     <main class="docs-main" id="project">
       <p class="hero-kicker">DEVELOPMENT DOCUMENT</p>
       <h1>明鉴开发说明</h1>
-      <p class="docs-lead">明鉴是使用React、FastAPI与PyWebView构建的本地材料审查工具。当前版本提供竞赛和合同审查，并通过统一证据结构连接规则、问题与原文。</p>
+      <p class="docs-lead">明鉴是使用CustomTkinter与Python审查引擎构建的原生Windows工具。当前版本提供竞赛和合同审查，并通过统一证据结构连接规则、问题与原文。</p>
       <div class="docs-actions">
         <a class="button button-primary" href="./downloads/MingJian.exe" download>下载桌面端</a>
         <a class="button button-quiet" href="./index.html">返回产品首页</a>
@@ -48,19 +48,16 @@
 
       <section class="docs-section" id="architecture">
         <h2>技术架构</h2>
-        <pre>PyWebView桌面窗口
-        │
+        <pre>CustomTkinter原生工作台
+        │ Python函数调用
         ▼
-React静态界面
-        │ HTTP / multipart
-        ▼
-FastAPI本地服务
+本地审查引擎
         ├── 文件格式路由
         ├── PDF / Word / Excel解析
         ├── 竞赛规则执行器
         ├── 合同规则执行器
         └── Evidence / Finding响应</pre>
-        <p>桌面端只监听本机地址。界面和API被打包进同一个EXE，用户不需要安装Python或Node.js。</p>
+        <p>桌面端不启动浏览器、本地Web服务或监听端口。界面与审查引擎被打包进同一个EXE，用户不需要安装Python或Node.js。</p>
       </section>
 
       <section class="docs-section" id="formats">
