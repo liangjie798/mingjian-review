@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import difflib
+import html
+import re
 import sys
 from pathlib import Path
 
@@ -15,6 +18,7 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QFormLayout,
     QFrame,
+    QGridLayout,
     QHBoxLayout,
     QLabel,
     QLineEdit,
@@ -26,12 +30,13 @@ from PySide6.QtWidgets import (
     QScrollArea,
     QSizePolicy,
     QSplitter,
+    QTextBrowser,
     QVBoxLayout,
     QWidget,
 )
 
 from backend.model_provider import ModelConfig, list_models
-from backend.review_engine import Finding, ReviewResult, SUPPORTED_SUFFIXES, review_paths
+from backend.review_engine import Finding, ReviewResult, SUPPORTED_SUFFIXES, extract_text, review_paths
 
 
 COLORS = {
@@ -211,6 +216,213 @@ class FindingRow(QWidget):
         layout.addWidget(badge, 0, Qt.AlignmentFlag.AlignTop)
         layout.addLayout(texts, 1)
         self.setStyleSheet(f"QLabel[role='{finding.severity}'] {{ color: {color}; }}")
+
+
+def _diff_tokens(text: str) -> list[str]:
+    return re.findall(r"[\u4e00-\u9fff]|[A-Za-z0-9_./%:-]+|\s+|.", text, flags=re.DOTALL)
+
+
+def _highlight_contract_diff(left_text: str, right_text: str) -> tuple[str, str, int, int, int, int]:
+    left_tokens = _diff_tokens(left_text)
+    right_tokens = _diff_tokens(right_text)
+    matcher = difflib.SequenceMatcher(None, left_tokens, right_tokens, autojunk=False)
+    left_html: list[str] = []
+    right_html: list[str] = []
+    changed_blocks = 0
+    removed = 0
+    added = 0
+
+    def render(tokens: list[str], css_class: str = "") -> str:
+        content = html.escape("".join(tokens))
+        return f'<span class="{css_class}">{content}</span>' if css_class else content
+
+    for tag, left_start, left_end, right_start, right_end in matcher.get_opcodes():
+        left_part = left_tokens[left_start:left_end]
+        right_part = right_tokens[right_start:right_end]
+        if tag == "equal":
+            left_html.append(render(left_part))
+            right_html.append(render(right_part))
+            continue
+        changed_blocks += 1
+        removed += len("".join(left_part).strip())
+        added += len("".join(right_part).strip())
+        if tag == "delete":
+            left_html.append(render(left_part, "removed"))
+        elif tag == "insert":
+            right_html.append(render(right_part, "added"))
+        else:
+            left_html.append(render(left_part, "changed"))
+            right_html.append(render(right_part, "changed"))
+
+    style = """
+    <style>
+      body { color: #DCE3E7; background: #111820; font-family: 'Microsoft YaHei UI';
+             font-size: 13px; line-height: 1.85; white-space: pre-wrap; margin: 18px; }
+      .removed { background: #51272D; color: #FFD8DB; text-decoration: line-through; }
+      .added { background: #174737; color: #B9F6D9; }
+      .changed { background: #554426; color: #FFE2A6; }
+    </style>
+    """
+    similarity = round(matcher.ratio() * 100)
+    return style + "<body>" + "".join(left_html) + "</body>", style + "<body>" + "".join(right_html) + "</body>", similarity, changed_blocks, removed, added
+
+
+class ContractCompareDialog(QDialog):
+    def __init__(self, parent: QWidget | None = None) -> None:
+        super().__init__(parent)
+        self.setWindowTitle("甲乙双方合同对比")
+        self.resize(1180, 790)
+        self.setMinimumSize(960, 650)
+        self.left_path: Path | None = None
+        self.right_path: Path | None = None
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(24, 22, 24, 20)
+        layout.setSpacing(14)
+
+        heading = QHBoxLayout()
+        heading_text = QVBoxLayout()
+        heading_text.setSpacing(3)
+        title = QLabel("甲乙双方合同版本对比")
+        title.setObjectName("dialogTitle")
+        description = QLabel("选择双方合同后，系统会逐字比对并高亮增加、删除和修改内容。")
+        description.setObjectName("dialogDescription")
+        heading_text.addWidget(title)
+        heading_text.addWidget(description)
+        self.compare_button = QPushButton("开始对比")
+        self.compare_button.setObjectName("primaryButton")
+        self.compare_button.setMinimumSize(112, 40)
+        self.compare_button.setEnabled(False)
+        self.compare_button.clicked.connect(self._compare)
+        heading.addLayout(heading_text, 1)
+        heading.addWidget(self.compare_button, 0, Qt.AlignmentFlag.AlignBottom)
+        layout.addLayout(heading)
+
+        file_grid = QGridLayout()
+        file_grid.setHorizontalSpacing(12)
+        self.left_file = self._file_picker("甲方合同", "选择甲方版本", True)
+        self.right_file = self._file_picker("乙方合同", "选择乙方版本", False)
+        file_grid.addWidget(self.left_file, 0, 0)
+        file_grid.addWidget(self.right_file, 0, 1)
+        layout.addLayout(file_grid)
+
+        summary = QFrame()
+        summary.setObjectName("compareSummary")
+        summary_layout = QHBoxLayout(summary)
+        summary_layout.setContentsMargins(16, 10, 16, 10)
+        self.similarity_label = QLabel("相似度  —")
+        self.blocks_label = QLabel("差异段  —")
+        self.removed_label = QLabel("甲方独有  —")
+        self.added_label = QLabel("乙方独有  —")
+        for label in [self.similarity_label, self.blocks_label, self.removed_label, self.added_label]:
+            label.setObjectName("compareMetric")
+            summary_layout.addWidget(label)
+        summary_layout.addStretch()
+        legend = QLabel("<span style='color:#FF6B73'>■</span> 删除&nbsp;&nbsp; <span style='color:#49DDAA'>■</span> 新增&nbsp;&nbsp; <span style='color:#FFB45D'>■</span> 修改")
+        legend.setObjectName("compareLegend")
+        summary_layout.addWidget(legend)
+        layout.addWidget(summary)
+
+        result_splitter = QSplitter(Qt.Orientation.Horizontal)
+        result_splitter.setChildrenCollapsible(False)
+        self.left_result = self._result_panel("甲方版本")
+        self.right_result = self._result_panel("乙方版本")
+        result_splitter.addWidget(self.left_result[0])
+        result_splitter.addWidget(self.right_result[0])
+        result_splitter.setSizes([560, 560])
+        layout.addWidget(result_splitter, 1)
+        self._sync_scrollbars()
+
+    def _file_picker(self, title: str, button_text: str, is_left: bool) -> QFrame:
+        card = QFrame()
+        card.setObjectName("compareFileCard")
+        row = QHBoxLayout(card)
+        row.setContentsMargins(14, 12, 12, 12)
+        label = QLabel(title)
+        label.setObjectName("compareSide")
+        path_label = QLabel("尚未选择文件")
+        path_label.setObjectName("compareFileName")
+        path_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+        button = QPushButton(button_text)
+        button.setObjectName("secondaryButton")
+        button.setMinimumHeight(34)
+        button.clicked.connect(lambda: self._choose_contract(is_left, path_label))
+        row.addWidget(label)
+        row.addWidget(path_label, 1)
+        row.addWidget(button)
+        return card
+
+    def _result_panel(self, title: str) -> tuple[QFrame, QTextBrowser]:
+        panel = QFrame()
+        panel.setObjectName("compareResultPanel")
+        panel_layout = QVBoxLayout(panel)
+        panel_layout.setContentsMargins(0, 0, 0, 0)
+        panel_layout.setSpacing(0)
+        label = QLabel(title)
+        label.setObjectName("compareResultTitle")
+        label.setContentsMargins(16, 0, 16, 0)
+        label.setFixedHeight(42)
+        browser = QTextBrowser()
+        browser.setObjectName("compareBrowser")
+        browser.setPlaceholderText("完成文件选择后开始对比")
+        panel_layout.addWidget(label)
+        panel_layout.addWidget(browser, 1)
+        return panel, browser
+
+    def _choose_contract(self, is_left: bool, path_label: QLabel) -> None:
+        filename, _ = QFileDialog.getOpenFileName(
+            self, "选择合同版本", "",
+            "支持的合同 (*.pdf *.docx *.xlsx *.txt *.md *.csv *.json);;所有文件 (*.*)",
+        )
+        if not filename:
+            return
+        path = Path(filename)
+        if path.suffix.lower() not in SUPPORTED_SUFFIXES:
+            QMessageBox.warning(self, "文件格式不支持", "请选择 PDF、DOCX、XLSX、TXT、Markdown、CSV 或 JSON 文件。")
+            return
+        if is_left:
+            self.left_path = path
+        else:
+            self.right_path = path
+        path_label.setText(path.name)
+        path_label.setToolTip(str(path))
+        self.compare_button.setEnabled(self.left_path is not None and self.right_path is not None)
+
+    def _compare(self) -> None:
+        if not self.left_path or not self.right_path:
+            return
+        self.compare_button.setEnabled(False)
+        self.compare_button.setText("正在对比…")
+        QApplication.setOverrideCursor(Qt.CursorShape.WaitCursor)
+        QApplication.processEvents()
+        try:
+            left_pages, _ = extract_text(self.left_path)
+            right_pages, _ = extract_text(self.right_path)
+            left_text = "\n\n".join(left_pages).strip()
+            right_text = "\n\n".join(right_pages).strip()
+            if not left_text or not right_text:
+                raise ValueError("至少有一份合同无法提取文字，请检查文件是否为扫描图片。")
+            if len(left_text) > 200_000 or len(right_text) > 200_000:
+                raise ValueError("合同文字超过 20 万字，请拆分章节后分别对比。")
+            left_html, right_html, similarity, blocks, removed, added = _highlight_contract_diff(left_text, right_text)
+            self.left_result[1].setHtml(left_html)
+            self.right_result[1].setHtml(right_html)
+            self.similarity_label.setText(f"相似度  {similarity}%")
+            self.blocks_label.setText(f"差异段  {blocks}")
+            self.removed_label.setText(f"甲方独有  {removed} 字")
+            self.added_label.setText(f"乙方独有  {added} 字")
+        except Exception as error:
+            QMessageBox.critical(self, "合同对比失败", str(error))
+        finally:
+            QApplication.restoreOverrideCursor()
+            self.compare_button.setText("重新对比")
+            self.compare_button.setEnabled(True)
+
+    def _sync_scrollbars(self) -> None:
+        left_bar = self.left_result[1].verticalScrollBar()
+        right_bar = self.right_result[1].verticalScrollBar()
+        left_bar.valueChanged.connect(lambda value: right_bar.setValue(round(value * right_bar.maximum() / max(1, left_bar.maximum()))))
+        right_bar.valueChanged.connect(lambda value: left_bar.setValue(round(value * left_bar.maximum() / max(1, right_bar.maximum()))))
 
 
 class ModelSettingsDialog(QDialog):
@@ -456,6 +668,10 @@ class MingJianWindow(QMainWindow):
         self.model_button.setMinimumSize(112, 42)
         self.model_button.clicked.connect(self._open_model_settings)
         self._update_model_button()
+        self.contract_compare_button = QPushButton("⇄  合同对比")
+        self.contract_compare_button.setObjectName("secondaryButton")
+        self.contract_compare_button.setMinimumSize(112, 42)
+        self.contract_compare_button.clicked.connect(self._open_contract_compare)
         self.add_button = QPushButton("＋  添加材料")
         self.add_button.setObjectName("secondaryButton")
         self.add_button.setMinimumSize(112, 42)
@@ -465,6 +681,7 @@ class MingJianWindow(QMainWindow):
         self.review_button.setMinimumSize(112, 42)
         self.review_button.clicked.connect(self._start_review)
         header.addWidget(self.model_button)
+        header.addWidget(self.contract_compare_button)
         header.addWidget(self.add_button)
         header.addWidget(self.review_button)
         layout.addLayout(header)
@@ -530,6 +747,7 @@ class MingJianWindow(QMainWindow):
         self.scenario = scenario
         info = SCENARIOS[scenario]
         self.nav_buttons[scenario].setChecked(True)
+        self.contract_compare_button.setVisible(scenario == "contract")
         self.title_label.setText(info["title"])
         self.subtitle_label.setText(info["subtitle"])
         self.result = None
@@ -628,6 +846,10 @@ class MingJianWindow(QMainWindow):
             self.status_label.setText("已启用外部模型接口，下次审查会自动调用")
         else:
             self.status_label.setText("AI 已关闭，将使用内置规则审查")
+
+    def _open_contract_compare(self) -> None:
+        dialog = ContractCompareDialog(self)
+        dialog.exec()
 
     def _update_model_button(self) -> None:
         if self.model_config.enabled:
@@ -991,13 +1213,21 @@ QComboBox QAbstractItemView {{ background: {COLORS['panel_alt']}; border: 1px so
 QCheckBox {{ spacing: 8px; }}
 QDialogButtonBox QPushButton {{ min-width: 80px; min-height: 34px; background: {COLORS['panel_alt']}; border: 1px solid {COLORS['border']}; border-radius: 7px; }}
 QDialogButtonBox QPushButton:hover {{ border-color: {COLORS['accent']}; }}
+QFrame#compareFileCard, QFrame#compareResultPanel {{ background: {COLORS['panel']}; border: 1px solid {COLORS['border']}; border-radius: 9px; }}
+QLabel#compareSide {{ min-width: 64px; color: {COLORS['accent']}; font-size: 11px; font-weight: 700; }}
+QLabel#compareFileName {{ color: #C7D0D6; font-size: 11px; }}
+QFrame#compareSummary {{ background: #0D1319; border: 1px solid {COLORS['border']}; border-radius: 8px; }}
+QLabel#compareMetric {{ min-width: 112px; color: #DCE3E7; font-family: "Cascadia Mono"; font-size: 10px; font-weight: 700; }}
+QLabel#compareLegend {{ color: {COLORS['muted']}; font-size: 10px; }}
+QLabel#compareResultTitle {{ background: {COLORS['panel_alt']}; border-bottom: 1px solid {COLORS['border']}; font-size: 12px; font-weight: 700; }}
+QTextBrowser#compareBrowser {{ background: {COLORS['panel']}; border: 0; padding: 0; selection-background-color: #24584A; }}
 """
 
 
 def main() -> None:
     app = QApplication(sys.argv)
     app.setApplicationName("明鉴")
-    app.setApplicationVersion("0.7.0")
+    app.setApplicationVersion("0.8.0")
     app.setWindowIcon(QIcon(str(resource_path("assets/mingjian-v2.ico"))))
     palette = QPalette()
     palette.setColor(QPalette.ColorRole.Window, QColor(COLORS["app"]))

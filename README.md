@@ -6,6 +6,7 @@
 
 - 大学生竞赛材料：检查必交材料、团队信息、日期、金额和跨文件一致性。
 - 合同材料：检查付款比例、验收期限、违约责任和关键条款。
+- 合同版本对比：并排比较甲乙双方合同，使用颜色高亮新增、删除和修改内容。
 - 证据追溯：结论关联文件名、页码和原文片段。
 - 本地 AI：内置 Qwen2.5-0.5B-Instruct Q4_K_M，通过 llama.cpp 在 CPU 上推理。
 - 自定义模型：支持 OpenAI、Anthropic Claude、Google Gemini、DeepSeek、通义千问、智谱 GLM、Kimi、豆包、硅基流动、OpenRouter、Ollama 和其他 OpenAI 兼容服务。
