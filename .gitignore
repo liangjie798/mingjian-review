@@ -1,17 +1,10 @@
 node_modules/
-.venv/
-build/
-dist/
 dist-web/
 dist-wpf/
 models/
 runtime/
 release/
 output/
-
-__pycache__/
-*.py[cod]
-.pytest_cache/
 
 *.tsbuildinfo
 vite.config.js

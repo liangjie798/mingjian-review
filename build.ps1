@@ -1,27 +1,35 @@
 $ErrorActionPreference = "Stop"
+$root = Split-Path -Parent $MyInvocation.MyCommand.Path
+$localDotnet = Join-Path $root ".tools\dotnet\dotnet.exe"
+$dotnet = if (Test-Path $localDotnet) { $localDotnet } else { "dotnet" }
 
-$ProjectRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
-Set-Location $ProjectRoot
-
-$ModelPath = "models\qwen2.5-0.5b-instruct-q4_k_m.gguf"
-$RuntimePath = "runtime\llama\llama-cli.exe"
-if (-not (Test-Path $ModelPath)) {
-    throw "Missing embedded model: $ModelPath"
-}
-if (-not (Test-Path $RuntimePath)) {
-    throw "Missing llama.cpp runtime: $RuntimePath"
-}
-
-if (-not (Test-Path ".venv\Scripts\python.exe")) {
-    py -m venv .venv
+if (-not (Get-Command $dotnet -ErrorAction SilentlyContinue)) {
+    $sdkDir = Join-Path $root ".tools\dotnet"
+    $installer = Join-Path $env:TEMP "dotnet-install.ps1"
+    Invoke-WebRequest -UseBasicParsing "https://dot.net/v1/dotnet-install.ps1" -OutFile $installer
+    & powershell -NoProfile -ExecutionPolicy Bypass -File $installer -Channel 8.0 -InstallDir $sdkDir -NoPath
+    $dotnet = Join-Path $sdkDir "dotnet.exe"
 }
 
-& ".venv\Scripts\python.exe" -m pip install --upgrade pip
-& ".venv\Scripts\python.exe" -m pip install -r requirements-desktop.txt
-& ".venv\Scripts\python.exe" -m PyInstaller --noconfirm --clean mingjian.spec
+$project = Join-Path $root "src\MingJian.Desktop\MingJian.Desktop.csproj"
+$output = Join-Path $root "dist-wpf"
+if (Test-Path $output) { Remove-Item -LiteralPath $output -Recurse -Force }
 
-$Hash = (Get-FileHash "dist\MingJian-AI.exe" -Algorithm SHA256).Hash
-Set-Content -Encoding UTF8 "dist\MingJian-AI.exe.sha256.txt" "$Hash  MingJian-AI.exe"
+$env:DOTNET_CLI_TELEMETRY_OPTOUT = "1"
+& $dotnet test (Join-Path $root "MingJian.sln") -c Release
+if ($LASTEXITCODE -ne 0) { throw "测试未通过" }
 
-Write-Host "Build complete: dist\MingJian-AI.exe"
-Write-Host "SHA-256: $Hash"
+& $dotnet publish $project -c Release -r win-x64 --self-contained true -o $output `
+    -p:PublishSingleFile=true `
+    -p:IncludeNativeLibrariesForSelfExtract=true `
+    -p:IncludeAllContentForSelfExtract=true `
+    -p:EnableCompressionInSingleFile=true `
+    -p:DebugType=None `
+    -p:DebugSymbols=false
+if ($LASTEXITCODE -ne 0) { throw "发布失败" }
+
+$exe = Join-Path $output "MingJian-AI.exe"
+$checksum = (Get-FileHash -Algorithm SHA256 -LiteralPath $exe).Hash
+"$checksum  MingJian-AI.exe" | Set-Content -LiteralPath "$exe.sha256.txt" -Encoding ascii
+Write-Host "WPF 版本已生成：$exe"
+Write-Host "SHA-256：$checksum"

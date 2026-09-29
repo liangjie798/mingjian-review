@@ -17,7 +17,7 @@ dotnet restore MingJian.sln
 dotnet run --project src\MingJian.Desktop\MingJian.Desktop.csproj
 ```
 
-需要 .NET 8 SDK。`build-wpf.ps1` 在找不到 SDK 时会下载项目专用副本到 `.tools/dotnet`，不会修改系统环境变量。
+需要 .NET 8 SDK。`build.ps1` 在找不到 SDK 时会下载项目专用副本到 `.tools/dotnet`，不会修改系统环境变量。详细模块设计见 [C# 桌面端架构](docs/CSHARP_ARCHITECTURE.md)。
 
 应用先对全部材料执行确定性规则，再把最多约 6000 个字符的文本样本交给模型。模型结论只有在文件名、页码、风险级别和原文证据通过校验后才会进入结果列表。
 
@@ -48,7 +48,7 @@ dotnet test MingJian.sln
 ## 构建 WPF EXE
 
 ```powershell
-.\build-wpf.ps1
+.\build.ps1
 ```
 
 输出：
@@ -60,8 +60,6 @@ dist-wpf/MingJian-AI.exe.sha256.txt
 
 该文件包含 .NET 运行时、约 469 MB 模型和 llama.cpp。用户无需安装 .NET；首次启动时会把依赖释放到当前用户的临时目录。发布文件超过 GitHub 普通仓库的单文件限制，应上传到 GitHub Releases。
 
-旧版 Python 构建脚本仍保留用于迁移核对，新的发布应使用 `build-wpf.ps1`。
-
 ## 发布
 
 1. 运行规则与本地模型测试。
@@ -72,8 +70,4 @@ dist-wpf/MingJian-AI.exe.sha256.txt
 
 ## 官网预览
 
-```powershell
-py -m http.server 4173 --directory website
-```
-
-打开 `http://127.0.0.1:4173`。推送到默认分支后，GitHub Actions 会发布 `website/`。
+直接打开 `website/index.html` 可进行基础预览。需要本地 HTTP 服务时，可运行 `npx --yes serve website --listen 4173`，再打开 `http://127.0.0.1:4173`。推送到默认分支后，GitHub Actions 会发布 `website/`。

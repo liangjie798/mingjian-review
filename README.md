@@ -20,19 +20,18 @@
 
 ## 开发
 
-开发环境、模型准备、打包与发布方法见 [DEVELOPMENT.md](DEVELOPMENT.md)。
+开发环境、模型准备、打包与发布方法见 [DEVELOPMENT.md](DEVELOPMENT.md)，模块设计见 [C# 桌面端架构](docs/CSHARP_ARCHITECTURE.md)。
 
 ## 目录
 
 ```text
 src/MingJian.Desktop/  C# + WPF 主程序、解析、规则和模型适配
 tests/                 WPF 核心功能自动化测试
-backend/               Python 迁移基线，暂时保留
-scenario-packs/   竞赛与合同规则包
-assets/           桌面端图标
-website/          GitHub Pages 静态官网
-build-wpf.ps1     WPF 单文件 EXE 构建脚本
-desktop.py        旧版 PySide6 客户端
+docs/                  C# 架构与开发说明
+scenario-packs/        竞赛与合同规则包
+assets/                桌面端图标
+website/               GitHub Pages 静态官网
+build.ps1              WPF 单文件 EXE 构建脚本
 ```
 
 ## 模型与许可
