@@ -24,7 +24,7 @@
                         <Button Style="{StaticResource IconButton}" Content="&#xE8BB;" ToolTip="关闭" Click="Close_Click" BorderThickness="0" Background="Transparent"/>
                     </StackPanel></Grid>
                 </Border>
-                <Grid Grid.Row="1" x:Name="PageHost" Margin="28,24,28,26">
+                <Grid Grid.Row="1" x:Name="PageHost" Margin="28,24,28,26" ClipToBounds="True">
                     <Grid x:Name="ReviewPage">
                         <Grid.RowDefinitions><RowDefinition Height="Auto"/><RowDefinition Height="Auto"/><RowDefinition Height="*"/><RowDefinition Height="Auto"/></Grid.RowDefinitions>
                         <Grid><StackPanel><TextBlock x:Name="PageTitle" Text="大学生竞赛材料审查" Style="{StaticResource TitleText}"/><TextBlock x:Name="PageSubtitle" Text="核对材料完整性、团队信息与跨文件一致性" Style="{StaticResource MutedText}" Margin="0,7,0,0" FontSize="13"/></StackPanel><StackPanel Orientation="Horizontal" HorizontalAlignment="Right" VerticalAlignment="Center"><Border Background="{DynamicResource SurfaceAltBrush}" CornerRadius="10" Padding="3"><StackPanel Orientation="Horizontal"><Button x:Name="CompetitionButton" Style="{StaticResource BaseButton}" Content="竞赛材料" Click="Competition_Click" BorderThickness="0"/><Button x:Name="ContractButton" Style="{StaticResource BaseButton}" Content="合同审查" Click="Contract_Click" BorderThickness="0"/></StackPanel></Border><Button x:Name="ExportButton" Style="{StaticResource BaseButton}" Content="导出" Click="ExportReport_Click" Margin="12,0,0,0" IsEnabled="False"/><Button x:Name="StartButton" Style="{StaticResource PrimaryButton}" Content="开始审查" Click="StartReview_Click" Margin="8,0,0,0" MinWidth="104"/></StackPanel></Grid>

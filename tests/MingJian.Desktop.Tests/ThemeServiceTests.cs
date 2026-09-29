@@ -27,6 +27,21 @@ public sealed class ThemeServiceTests
     }
 
     [Fact]
+    public void ApplyAnimated_UsesWritableBrushesWithTargetBaseColors()
+    {
+        var resources = new ResourceDictionary
+        {
+            ["AppBrush"] = new SolidColorBrush(Color.FromRgb(9, 16, 21))
+        };
+
+        ThemeService.ApplyAnimated(resources, dark: false, TimeSpan.FromMilliseconds(200));
+
+        var brush = Assert.IsType<SolidColorBrush>(resources["AppBrush"]);
+        Assert.False(brush.IsFrozen);
+        Assert.Equal(Color.FromRgb(244, 247, 246), brush.GetAnimationBaseValue(SolidColorBrush.ColorProperty));
+    }
+
+    [Fact]
     public void ComboBoxStyle_FollowsDynamicThemeResources()
     {
         Exception? failure = null;

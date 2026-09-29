@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 
 namespace MingJian.Desktop.Services;
 
@@ -42,6 +43,30 @@ public static class ThemeService
         {
             var color = (Color)ColorConverter.ConvertFromString(value);
             resources[key] = new SolidColorBrush(color);
+        }
+    }
+
+    public static void ApplyAnimated(ResourceDictionary resources, bool dark, TimeSpan duration)
+    {
+        if (!SystemParameters.ClientAreaAnimation || duration <= TimeSpan.Zero)
+        {
+            Apply(resources, dark);
+            return;
+        }
+
+        var palette = dark ? DarkPalette : LightPalette;
+        var easing = new CubicEase { EasingMode = EasingMode.EaseOut };
+        foreach (var (key, value) in palette)
+        {
+            var targetColor = (Color)ColorConverter.ConvertFromString(value);
+            var currentColor = resources[key] is SolidColorBrush current ? current.Color : targetColor;
+            var brush = new SolidColorBrush(targetColor);
+            brush.BeginAnimation(SolidColorBrush.ColorProperty, new ColorAnimation(currentColor, targetColor, duration)
+            {
+                EasingFunction = easing,
+                FillBehavior = FillBehavior.Stop
+            }, HandoffBehavior.SnapshotAndReplace);
+            resources[key] = brush;
         }
     }
 }

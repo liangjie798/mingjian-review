@@ -8,7 +8,6 @@ using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
-using System.Windows.Media.Animation;
 
 namespace MingJian.Desktop;
 
@@ -23,6 +22,10 @@ public partial class MainWindow : Window
     private string? _leftContract;
     private string? _rightContract;
     private Button? _selectedNav;
+    private FrameworkElement? _activePage;
+    private int _pageTransitionVersion;
+    private bool _scenarioTransitioning;
+    private double _themeRotation;
 
     public MainWindow()
     {
@@ -31,7 +34,7 @@ public partial class MainWindow : Window
         FindingsList.ItemsSource = _findings;
         UpdateScenario();
         UpdateModelStatus();
-        Loaded += (_, _) => ShowPage(ReviewPage, "材料审查", ReviewNav);
+        Loaded += async (_, _) => await ShowPageAsync(ReviewPage, "材料审查", ReviewNav);
     }
 
     private void TitleBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
@@ -43,17 +46,38 @@ public partial class MainWindow : Window
     private void ToggleMaximize() => WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
     private void Close_Click(object sender, RoutedEventArgs e) => Close();
 
-    private void ReviewNav_Click(object sender, RoutedEventArgs e) => ShowPage(ReviewPage, "材料审查", ReviewNav);
-    private void CompareNav_Click(object sender, RoutedEventArgs e) => ShowPage(ComparePage, "合同对比", CompareNav);
-    private void GuideNav_Click(object sender, RoutedEventArgs e) => ShowPage(GuidePage, "使用指南", GuideNav);
+    private async void ReviewNav_Click(object sender, RoutedEventArgs e) => await ShowPageAsync(ReviewPage, "材料审查", ReviewNav);
+    private async void CompareNav_Click(object sender, RoutedEventArgs e) => await ShowPageAsync(ComparePage, "合同对比", CompareNav);
+    private async void GuideNav_Click(object sender, RoutedEventArgs e) => await ShowPageAsync(GuidePage, "使用指南", GuideNav);
 
-    private void ShowPage(UIElement page, string label, Button nav)
+    private async Task ShowPageAsync(FrameworkElement page, string label, Button nav)
     {
-        foreach (var element in new[] { ReviewPage, ComparePage, GuidePage }) element.Visibility = element == page ? Visibility.Visible : Visibility.Collapsed;
+        if (_activePage == page) return;
+        var transition = ++_pageTransitionVersion;
+        var previous = _activePage;
+        _activePage = page;
         _selectedNav = nav;
         ApplyNavigationStyles();
         WindowSection.Text = label;
-        AnimatePage(page);
+        MotionService.PrepareEnter(WindowSection, 7);
+        MotionService.Animate(WindowSection, 1, 0, 190);
+
+        page.Visibility = Visibility.Visible;
+        MotionService.PrepareEnter(page, 20);
+        if (previous is not null)
+        {
+            previous.Visibility = Visibility.Visible;
+            MotionService.Animate(previous, 0, -14, 180);
+        }
+        MotionService.Animate(page, 1, 0, 260);
+
+        await Task.Delay(MotionService.Duration(270));
+        if (transition != _pageTransitionVersion) return;
+        foreach (var element in new[] { ReviewPage, ComparePage, GuidePage })
+        {
+            element.Visibility = element == page ? Visibility.Visible : Visibility.Collapsed;
+            MotionService.Reset(element);
+        }
     }
 
     private void ApplyNavigationStyles()
@@ -65,18 +89,32 @@ public partial class MainWindow : Window
         }
     }
 
-    private static void AnimatePage(UIElement page)
+    private async void Competition_Click(object sender, RoutedEventArgs e) => await SwitchScenarioAsync(ReviewScenario.Competition);
+    private async void Contract_Click(object sender, RoutedEventArgs e) => await SwitchScenarioAsync(ReviewScenario.Contract);
+    private async Task SwitchScenarioAsync(ReviewScenario scenario)
     {
-        var transform = new TranslateTransform(18, 0);
-        page.RenderTransform = transform;
-        page.Opacity = 0;
-        var easing = new CubicEase { EasingMode = EasingMode.EaseOut };
-        page.BeginAnimation(OpacityProperty, new DoubleAnimation(0, 1, TimeSpan.FromMilliseconds(240)) { EasingFunction = easing });
-        transform.BeginAnimation(TranslateTransform.XProperty, new DoubleAnimation(18, 0, TimeSpan.FromMilliseconds(300)) { EasingFunction = easing });
+        if (_scenarioTransitioning || _scenario == scenario) return;
+        _scenarioTransitioning = true;
+        CompetitionButton.IsEnabled = false;
+        ContractButton.IsEnabled = false;
+        try
+        {
+            MotionService.Animate(ReviewPage, 0.25, -10, 105);
+            await Task.Delay(MotionService.Duration(110));
+            _scenario = scenario;
+            UpdateScenario();
+            MotionService.PrepareEnter(ReviewPage, 12, 0.3);
+            MotionService.Animate(ReviewPage, 1, 0, 190);
+            await Task.Delay(MotionService.Duration(195));
+            MotionService.Reset(ReviewPage);
+        }
+        finally
+        {
+            CompetitionButton.IsEnabled = true;
+            ContractButton.IsEnabled = true;
+            _scenarioTransitioning = false;
+        }
     }
-
-    private void Competition_Click(object sender, RoutedEventArgs e) { _scenario = ReviewScenario.Competition; UpdateScenario(); }
-    private void Contract_Click(object sender, RoutedEventArgs e) { _scenario = ReviewScenario.Contract; UpdateScenario(); }
     private void UpdateScenario()
     {
         var competition = _scenario == ReviewScenario.Competition;
@@ -204,11 +242,13 @@ public partial class MainWindow : Window
     private void ThemeButton_Click(object sender, RoutedEventArgs e)
     {
         var nextDark = !_dark;
-        ThemeService.Apply(Application.Current.Resources, nextDark);
+        ThemeService.ApplyAnimated(Application.Current.Resources, nextDark, TimeSpan.FromMilliseconds(300));
         _dark = nextDark;
         ApplyNavigationStyles();
         ApplyScenarioStyles();
         ThemeButton.Content = _dark ? "\uE706" : "\uE708";
+        MotionService.AnimateThemeIcon(ThemeButton, _themeRotation, _themeRotation + 180, 340);
+        _themeRotation += 180;
     }
 
     private void ChooseLeftContract_Click(object sender, RoutedEventArgs e) { if (ChooseContract() is string path) { _leftContract = path; LeftContractButton.Content = Path.GetFileName(path); LeftDiffStatus.Text = "已选择"; } }
