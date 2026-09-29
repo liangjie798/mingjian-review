@@ -1,25 +1,27 @@
 # 开发与发布
 
-## 技术结构
+## 技术结构（当前版本）
 
-- 桌面 UI：PySide6
-- 文件解析：PyMuPDF、python-docx、openpyxl
+- 桌面 UI：C#、.NET 8、WPF
+- 文件解析：PdfPig、Open XML SDK
 - 本地推理：Qwen2.5 GGUF + llama.cpp
-- 云端模型：OpenAI 兼容协议、Anthropic Messages API、Gemini generateContent API
-- 打包：PyInstaller 单文件模式
+- 云端模型：OpenAI 兼容协议、Anthropic Messages API、Gemini generateContent API、Ollama
+- 合同差异：DiffPlex 双栏逐行比较
+- 打包：.NET 自包含单文件发布
 - 官网：原生 HTML、CSS、JavaScript，由 GitHub Pages 发布
 
 ## 本地开发
 
 ```powershell
-py -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements-desktop.txt
-.\.venv\Scripts\python.exe desktop.py
+dotnet restore MingJian.sln
+dotnet run --project src\MingJian.Desktop\MingJian.Desktop.csproj
 ```
+
+需要 .NET 8 SDK。`build-wpf.ps1` 在找不到 SDK 时会下载项目专用副本到 `.tools/dotnet`，不会修改系统环境变量。
 
 应用先对全部材料执行确定性规则，再把最多约 6000 个字符的文本样本交给模型。模型结论只有在文件名、页码、风险级别和原文证据通过校验后才会进入结果列表。
 
-合同版本对比使用 `difflib.SequenceMatcher` 对中英文混合文本分词比较。差异视图在本机生成，不调用模型接口；红色表示甲方版删除内容，绿色表示乙方版新增内容，琥珀色表示双方修改内容。
+合同版本对比使用 DiffPlex 逐行比较。差异视图在本机生成，不调用模型接口；红色表示甲方版删除内容，绿色表示乙方版新增内容，琥珀色表示双方修改内容。
 
 ## 准备内置模型
 
@@ -35,20 +37,30 @@ runtime/llama/LICENSE-llama.cpp
 
 模型使用 Qwen 官方的 Qwen2.5-0.5B-Instruct-GGUF Q4_K_M。运行时使用 llama.cpp Windows CPU x64 发行包。
 
-## 构建 EXE
+## 测试
 
 ```powershell
-.\build.ps1
+dotnet test MingJian.sln
+```
+
+测试覆盖文本解析、合同关键条款规则和竞赛材料跨文件一致性。
+
+## 构建 WPF EXE
+
+```powershell
+.\build-wpf.ps1
 ```
 
 输出：
 
 ```text
-dist/MingJian-AI.exe
-dist/MingJian-AI.exe.sha256.txt
+dist-wpf/MingJian-AI.exe
+dist-wpf/MingJian-AI.exe.sha256.txt
 ```
 
-单文件包含约 469 MB 模型和 CPU 推理运行时，因此首次启动需要等待 PyInstaller 解压。发布文件超过 GitHub 普通仓库的单文件限制，应上传到 GitHub Releases。
+该文件包含 .NET 运行时、约 469 MB 模型和 llama.cpp。用户无需安装 .NET；首次启动时会把依赖释放到当前用户的临时目录。发布文件超过 GitHub 普通仓库的单文件限制，应上传到 GitHub Releases。
+
+旧版 Python 构建脚本仍保留用于迁移核对，新的发布应使用 `build-wpf.ps1`。
 
 ## 发布
 

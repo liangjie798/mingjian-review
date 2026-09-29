@@ -3,6 +3,7 @@ node_modules/
 build/
 dist/
 dist-web/
+dist-wpf/
 models/
 runtime/
 release/
@@ -24,3 +25,8 @@ trae-reference.png
 .DS_Store
 Thumbs.db
 *.log
+.vs/
+src/**/bin/
+src/**/obj/
+tests/**/bin/
+tests/**/obj/

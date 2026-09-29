@@ -1,0 +1,32 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <ApplicationIcon>..\..\assets\mingjian-v2.ico</ApplicationIcon>
+    <AssemblyName>MingJian-AI</AssemblyName>
+    <RootNamespace>MingJian.Desktop</RootNamespace>
+    <Version>0.9.0</Version>
+    <Authors>明鉴</Authors>
+    <Product>明鉴 AI 材料审查</Product>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Resource Include="..\..\assets\mingjian-v2.ico" Link="Assets\mingjian.ico" />
+    <Content Include="..\..\scenario-packs\**\*" Link="scenario-packs\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\models\qwen2.5-0.5b-instruct-q4_k_m.gguf" Link="models\qwen2.5-0.5b-instruct-q4_k_m.gguf" CopyToOutputDirectory="PreserveNewest" Condition="Exists('..\..\models\qwen2.5-0.5b-instruct-q4_k_m.gguf')" />
+    <Content Include="..\..\models\LICENSE-Qwen2.5" Link="models\LICENSE-Qwen2.5" CopyToOutputDirectory="PreserveNewest" Condition="Exists('..\..\models\LICENSE-Qwen2.5')" />
+    <Content Include="..\..\runtime\llama\**\*" Link="runtime\llama\%(RecursiveDir)%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" Condition="Exists('..\..\runtime\llama')" />
+    <Content Include="..\..\THIRD_PARTY_NOTICES.md" Link="THIRD_PARTY_NOTICES.md" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="DiffPlex" Version="1.7.2" />
+    <PackageReference Include="DocumentFormat.OpenXml" Version="3.3.0" />
+    <PackageReference Include="PdfPig" Version="0.1.13" />
+  </ItemGroup>
+
+</Project>

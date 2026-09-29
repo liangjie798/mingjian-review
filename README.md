@@ -1,6 +1,6 @@
 # 明鉴
 
-明鉴是一款 Windows 本地材料审查工具。用户双击 EXE 后，把文件拖进窗口即可开始审查，无需安装 Python、注册账户或配置模型。
+明鉴是一款使用 C# + WPF 编写的 Windows 原生材料审查工具。用户双击 EXE 后，把文件拖进窗口即可开始审查，无需安装运行环境、注册账户或配置模型。
 
 ## 当前能力
 
@@ -11,6 +11,8 @@
 - 本地 AI：内置 Qwen2.5-0.5B-Instruct Q4_K_M，通过 llama.cpp 在 CPU 上推理。
 - 自定义模型：支持 OpenAI、Anthropic Claude、Google Gemini、DeepSeek、通义千问、智谱 GLM、Kimi、豆包、硅基流动、OpenRouter、Ollama 和其他 OpenAI 兼容服务。
 - 文件格式：PDF、DOCX、XLSX、TXT、Markdown、CSV、JSON。
+- 原生交互：深色/浅色主题、页面切换动效、拖放文件、风险详情与自绘窗口。
+- 审查报告：把风险、证据与处理建议导出为 Markdown 文档。
 
 ## 下载
 
@@ -23,13 +25,14 @@
 ## 目录
 
 ```text
-backend/          文档解析、规则审查和模型适配
+src/MingJian.Desktop/  C# + WPF 主程序、解析、规则和模型适配
+tests/                 WPF 核心功能自动化测试
+backend/               Python 迁移基线，暂时保留
 scenario-packs/   竞赛与合同规则包
 assets/           桌面端图标
 website/          GitHub Pages 静态官网
-desktop.py        PySide6 桌面应用
-mingjian.spec     PyInstaller 单文件配置
-build.ps1         Windows 构建脚本
+build-wpf.ps1     WPF 单文件 EXE 构建脚本
+desktop.py        旧版 PySide6 客户端
 ```
 
 ## 模型与许可
