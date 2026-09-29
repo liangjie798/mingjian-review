@@ -9,7 +9,8 @@
     <ApplicationIcon>..\..\assets\mingjian-v2.ico</ApplicationIcon>
     <AssemblyName>MingJian-AI</AssemblyName>
     <RootNamespace>MingJian.Desktop</RootNamespace>
-    <Version>0.9.0</Version>
+    <Version>0.9.1</Version>
+    <InformationalVersion>0.9.1</InformationalVersion>
     <Authors>明鉴</Authors>
     <Product>明鉴 AI 材料审查</Product>
   </PropertyGroup>

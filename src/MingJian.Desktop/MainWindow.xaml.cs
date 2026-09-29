@@ -22,6 +22,7 @@ public partial class MainWindow : Window
     private bool _dark = true;
     private string? _leftContract;
     private string? _rightContract;
+    private Button? _selectedNav;
 
     public MainWindow()
     {
@@ -49,13 +50,19 @@ public partial class MainWindow : Window
     private void ShowPage(UIElement page, string label, Button nav)
     {
         foreach (var element in new[] { ReviewPage, ComparePage, GuidePage }) element.Visibility = element == page ? Visibility.Visible : Visibility.Collapsed;
-        foreach (var button in new[] { ReviewNav, CompareNav, GuideNav })
-        {
-            button.Background = button == nav ? (Brush)FindResource("AccentDarkBrush") : Brushes.Transparent;
-            button.Foreground = button == nav ? (Brush)FindResource("AccentBrush") : (Brush)FindResource("MutedBrush");
-        }
+        _selectedNav = nav;
+        ApplyNavigationStyles();
         WindowSection.Text = label;
         AnimatePage(page);
+    }
+
+    private void ApplyNavigationStyles()
+    {
+        foreach (var button in new[] { ReviewNav, CompareNav, GuideNav })
+        {
+            button.Background = button == _selectedNav ? (Brush)FindResource("AccentDarkBrush") : Brushes.Transparent;
+            button.Foreground = button == _selectedNav ? (Brush)FindResource("AccentBrush") : (Brush)FindResource("MutedBrush");
+        }
     }
 
     private static void AnimatePage(UIElement page)
@@ -75,14 +82,20 @@ public partial class MainWindow : Window
         var competition = _scenario == ReviewScenario.Competition;
         PageTitle.Text = competition ? "大学生竞赛材料审查" : "合同条款审查";
         PageSubtitle.Text = competition ? "核对材料完整性、团队信息与跨文件一致性" : "检查主体、付款、验收、违约责任与关键条款风险";
-        CompetitionButton.Background = competition ? (Brush)FindResource("AccentDarkBrush") : Brushes.Transparent;
-        CompetitionButton.Foreground = competition ? (Brush)FindResource("AccentBrush") : (Brush)FindResource("MutedBrush");
-        ContractButton.Background = !competition ? (Brush)FindResource("AccentDarkBrush") : Brushes.Transparent;
-        ContractButton.Foreground = !competition ? (Brush)FindResource("AccentBrush") : (Brush)FindResource("MutedBrush");
+        ApplyScenarioStyles();
         _findings.Clear();
         ExportButton.IsEnabled = false;
         UpdateMetrics();
         ClearDetail();
+    }
+
+    private void ApplyScenarioStyles()
+    {
+        var competition = _scenario == ReviewScenario.Competition;
+        CompetitionButton.Background = competition ? (Brush)FindResource("AccentDarkBrush") : Brushes.Transparent;
+        CompetitionButton.Foreground = competition ? (Brush)FindResource("AccentBrush") : (Brush)FindResource("MutedBrush");
+        ContractButton.Background = !competition ? (Brush)FindResource("AccentDarkBrush") : Brushes.Transparent;
+        ContractButton.Foreground = !competition ? (Brush)FindResource("AccentBrush") : (Brush)FindResource("MutedBrush");
     }
 
     private void AddFiles_Click(object sender, RoutedEventArgs e)
@@ -152,8 +165,15 @@ public partial class MainWindow : Window
             lines.Add($"- 说明：{item.Detail}"); lines.Add($"- 原文：{item.Evidence.Excerpt}"); lines.Add($"- 建议：{item.Suggestion}"); lines.Add("");
         }
         lines.Add("> 本报告用于辅助核对，重要合同和正式申报材料请由专业人员最终确认。");
-        File.WriteAllLines(dialog.FileName, lines);
-        StatusText.Text = $"报告已导出：{Path.GetFileName(dialog.FileName)}";
+        try
+        {
+            File.WriteAllLines(dialog.FileName, lines);
+            StatusText.Text = $"报告已导出：{Path.GetFileName(dialog.FileName)}";
+        }
+        catch (Exception error)
+        {
+            MessageBox.Show(this, $"无法保存报告：{error.Message}", "导出失败", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
     }
     private void FindingsList_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
@@ -167,17 +187,27 @@ public partial class MainWindow : Window
     private void Settings_Click(object sender, RoutedEventArgs e)
     {
         var window = new SettingsWindow(_settings) { Owner = this };
-        if (window.ShowDialog() == true) { _settings = window.Settings; ModelService.SaveSettings(_settings); UpdateModelStatus(); }
+        if (window.ShowDialog() != true) return;
+        try
+        {
+            ModelService.SaveSettings(window.Settings);
+            _settings = window.Settings;
+            UpdateModelStatus();
+        }
+        catch (Exception error)
+        {
+            MessageBox.Show(this, $"无法保存模型设置：{error.Message}", "保存失败", MessageBoxButton.OK, MessageBoxImage.Warning);
+        }
     }
     private void UpdateModelStatus() => ModelStatusSide.Text = !_settings.Enabled ? "仅使用确定性规则" : _settings.Provider == "embedded" ? "Qwen2.5 · 离线可用" : _settings.Model;
 
     private void ThemeButton_Click(object sender, RoutedEventArgs e)
     {
-        _dark = !_dark;
-        var colors = _dark
-            ? new Dictionary<string, string> { ["AppBrush"] = "#091015", ["SidebarBrush"] = "#0D151B", ["SurfaceBrush"] = "#111C23", ["SurfaceAltBrush"] = "#16232B", ["SurfaceHoverBrush"] = "#1B2B34", ["BorderBrush"] = "#263841", ["TextBrush"] = "#F2F7F5", ["MutedBrush"] = "#90A29F", ["FaintBrush"] = "#61736F", ["AccentDarkBrush"] = "#102D25", ["AccentTextBrush"] = "#07130F" }
-            : new Dictionary<string, string> { ["AppBrush"] = "#F4F7F6", ["SidebarBrush"] = "#ECF1EF", ["SurfaceBrush"] = "#FFFFFF", ["SurfaceAltBrush"] = "#E8EFEC", ["SurfaceHoverBrush"] = "#DFE9E5", ["BorderBrush"] = "#CFDBD6", ["TextBrush"] = "#13201C", ["MutedBrush"] = "#5E706A", ["FaintBrush"] = "#81918C", ["AccentDarkBrush"] = "#D8F5E8", ["AccentTextBrush"] = "#07130F" };
-        foreach (var (key, value) in colors) ((SolidColorBrush)Application.Current.Resources[key]).Color = (Color)ColorConverter.ConvertFromString(value);
+        var nextDark = !_dark;
+        ThemeService.Apply(Application.Current.Resources, nextDark);
+        _dark = nextDark;
+        ApplyNavigationStyles();
+        ApplyScenarioStyles();
         ThemeButton.Content = _dark ? "\uE706" : "\uE708";
     }
 
