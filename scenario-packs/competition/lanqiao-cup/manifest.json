@@ -1,0 +1,7 @@
+{
+  "id": "competition.lanqiao-cup",
+  "name": "蓝桥杯竞赛材料审查",
+  "version": "0.1.0",
+  "documentTypes": ["registration", "source_code", "readme", "originality_statement"],
+  "factFields": ["work_name", "environment", "run_steps", "originality", "members"]
+}

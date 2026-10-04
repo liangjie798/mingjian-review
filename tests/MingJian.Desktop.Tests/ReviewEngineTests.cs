@@ -1,4 +1,5 @@
 using MingJian.Desktop.Services;
+using System.IO.Compression;
 
 namespace MingJian.Desktop.Tests;
 
@@ -68,6 +69,48 @@ public sealed class ReviewEngineTests : IDisposable
         var parsed = await DocumentParser.ParseAsync(path);
         Assert.Contains("这是审查材料", parsed.Pages[0]);
         Assert.Equal("文本解析", parsed.Parser);
+    }
+
+    [Fact]
+    public async Task ZipReview_ParsesEntriesAndChecksCompetitionCompleteness()
+    {
+        var path = Path.Combine(_folder, "互联网加材料.zip");
+        using (var archive = ZipFile.Open(path, ZipArchiveMode.Create))
+        {
+            AddEntry(archive, "申报/项目申报书.txt", "项目名称：星火平台\n联系方式：13800138000");
+            AddEntry(archive, "正文/商业计划书.txt", "市场分析：高校用户\n商业模式：订阅服务\n财务预测：首年收入");
+            AddEntry(archive, "答辩/路演PPT.txt", "知识产权：软件著作权申请中");
+        }
+
+        var result = await new ReviewEngine().ReviewAsync(ReviewScenario.InternetPlus, [path], new() { Enabled = false });
+
+        Assert.Contains(result.Documents, x => x.Name.Contains("商业计划书"));
+        Assert.DoesNotContain(result.Findings, x => x.Id.StartsWith("C-MISSING"));
+        Assert.DoesNotContain(result.Findings, x => x.Id.StartsWith("Z-"));
+    }
+
+    [Fact]
+    public async Task ZipReview_FlagsMissingFilesAndUnsafePaths()
+    {
+        var path = Path.Combine(_folder, "不完整材料.zip");
+        using (var archive = ZipFile.Open(path, ZipArchiveMode.Create))
+        {
+            AddEntry(archive, "../异常.txt", "不可解压到包外");
+            AddEntry(archive, "项目说明.txt", "联系方式：13800138000");
+        }
+
+        var result = await new ReviewEngine().ReviewAsync(ReviewScenario.ElectronicDesign, [path], new() { Enabled = false });
+
+        Assert.Contains(result.Findings, x => x.Id.StartsWith("Z-PATH"));
+        Assert.Contains(result.Findings, x => x.Title.Contains("设计报告"));
+        Assert.Contains(result.Findings, x => x.Title.Contains("源程序"));
+    }
+
+    private static void AddEntry(ZipArchive archive, string name, string content)
+    {
+        var entry = archive.CreateEntry(name);
+        using var writer = new StreamWriter(entry.Open());
+        writer.Write(content);
     }
 
     private string Write(string name, string content)

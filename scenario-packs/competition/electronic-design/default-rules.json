@@ -1,0 +1,5 @@
+[
+  { "ruleId": "electronic-design.required_documents", "severity": "blocking", "description": "检查设计报告和源程序" },
+  { "ruleId": "electronic-design.system", "severity": "high", "description": "检查系统方案与电路设计" },
+  { "ruleId": "electronic-design.test", "severity": "high", "description": "检查测试记录和指标结果" }
+]

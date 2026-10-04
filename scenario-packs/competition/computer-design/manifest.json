@@ -1,0 +1,7 @@
+{
+  "id": "competition.computer-design",
+  "name": "中国大学生计算机设计大赛材料审查",
+  "version": "0.1.0",
+  "documentTypes": ["application", "work_description", "demo", "source", "copyright_statement"],
+  "factFields": ["work_name", "architecture", "run_guide", "originality", "intellectual_property", "members"]
+}

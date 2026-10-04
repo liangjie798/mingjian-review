@@ -1,0 +1,5 @@
+[
+  { "ruleId": "computer-design.required_documents", "severity": "blocking", "description": "检查申报书和作品说明书" },
+  { "ruleId": "computer-design.demo", "severity": "high", "description": "检查演示材料与运行说明" },
+  { "ruleId": "computer-design.copyright", "severity": "high", "description": "检查原创性、第三方素材和知识产权" }
+]

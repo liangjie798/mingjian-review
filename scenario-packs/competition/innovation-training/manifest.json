@@ -1,0 +1,7 @@
+{
+  "id": "competition.innovation-training",
+  "name": "大学生创新创业训练计划材料审查",
+  "version": "0.1.0",
+  "documentTypes": ["application", "task_book", "midterm_report", "final_report", "evidence"],
+  "factFields": ["project_name", "innovation", "schedule", "budget", "members", "advisor"]
+}

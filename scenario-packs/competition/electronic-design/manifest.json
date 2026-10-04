@@ -1,0 +1,7 @@
+{
+  "id": "competition.electronic-design",
+  "name": "全国大学生电子设计竞赛材料审查",
+  "version": "0.1.0",
+  "documentTypes": ["design_report", "source_code", "test_record", "schematic"],
+  "factFields": ["work_name", "system_design", "circuit", "test_method", "test_result", "members"]
+}

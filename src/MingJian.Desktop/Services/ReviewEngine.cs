@@ -10,10 +10,11 @@ public sealed partial class ReviewEngine
         foreach (var path in paths)
         {
             progress?.Report($"正在解析 {Path.GetFileName(path)}");
-            documents.Add(await DocumentParser.ParseAsync(path));
+            documents.AddRange(await DocumentParser.ParseManyAsync(path));
         }
         progress?.Report("正在执行一致性与风险规则");
-        var findings = scenario == ReviewScenario.Contract ? ReviewContract(documents) : ReviewCompetition(documents, scenario);
+        var findings = ReviewArchives(documents);
+        findings.AddRange(scenario == ReviewScenario.Contract ? ReviewContract(documents) : ReviewCompetition(documents, scenario));
         var modelStatus = "内置规则审查";
         if (settings.Enabled)
         {
@@ -35,12 +36,16 @@ public sealed partial class ReviewEngine
     private static List<Finding> ReviewCompetition(IReadOnlyList<ParsedDocument> docs, ReviewScenario scenario)
     {
         var result = new List<Finding>();
-        var names = string.Join(' ', docs.Select(x => x.Name));
+        var names = string.Join('\n', docs.Select(x => x.Name).Concat(docs.Where(x => x.Parser == "ZIP 清单").SelectMany(x => x.Pages)));
         var expected = scenario switch
         {
             ReviewScenario.MathModeling => new[] { ("竞赛论文或答卷", "论文|答卷", RiskLevel.Blocking), ("支撑材料", "支撑|附件|代码|数据", RiskLevel.High) },
             ReviewScenario.InternetPlus => new[] { ("项目申报书", "报名|申报", RiskLevel.Blocking), ("商业计划书", "商业计划|项目计划|项目书", RiskLevel.Blocking), ("路演材料", "路演|PPT|演示", RiskLevel.High) },
             ReviewScenario.ChallengeCup => new[] { ("项目申报书", "报名|申报", RiskLevel.Blocking), ("项目或调研报告", "项目报告|调研报告|作品报告", RiskLevel.Blocking), ("证明材料", "证明|附件|佐证", RiskLevel.High) },
+            ReviewScenario.InnovationTraining => new[] { ("申报书或任务书", "申报书|任务书", RiskLevel.Blocking), ("中期或结题材料", "中期|结题", RiskLevel.Blocking), ("成果附件", "成果|附件|佐证", RiskLevel.High) },
+            ReviewScenario.ElectronicDesign => new[] { ("设计报告", "设计报告|论文", RiskLevel.Blocking), ("源程序", "源程序|源代码|代码", RiskLevel.Blocking), ("测试记录", "测试记录|测试数据|测试报告", RiskLevel.High) },
+            ReviewScenario.ComputerDesign => new[] { ("作品申报书", "申报书|报名表", RiskLevel.Blocking), ("作品说明书", "作品说明|设计说明|项目说明", RiskLevel.Blocking), ("演示材料", "演示|视频|答辩|PPT", RiskLevel.High) },
+            ReviewScenario.LanQiaoCup => new[] { ("参赛信息", "报名|参赛信息|队伍信息", RiskLevel.Blocking), ("源代码", "源代码|源码|代码", RiskLevel.Blocking), ("说明文档", "说明文档|使用说明|README", RiskLevel.High) },
             _ => new[] { ("报名表", "报名|申报", RiskLevel.Blocking), ("项目书", "项目书|计划书|商业计划", RiskLevel.Blocking), ("承诺书", "承诺", RiskLevel.High) }
         };
         foreach (var (label, pattern, risk) in expected.Where(x => !Regex.IsMatch(names, x.Item2, RegexOptions.IgnoreCase)))
@@ -75,9 +80,61 @@ public sealed partial class ReviewEngine
             MissingContent(result, text, "T-PRACTICE-01", @"实践|调研|走访|问卷|访谈", RiskLevel.Medium, "缺少实践或调研过程", "补充实践过程、样本来源、时间地点和证据材料。");
             MissingContent(result, text, "T-ADVISOR-01", @"指导教师|指导老师", RiskLevel.Medium, "未识别到指导教师信息", "核对申报书中的指导教师姓名、单位和联系方式。");
         }
+        else if (scenario == ReviewScenario.InnovationTraining)
+        {
+            MissingContent(result, text, "D-INNOVATION-01", @"创新点|创新性|创新之处", RiskLevel.High, "缺少创新点说明", "说明项目解决的问题、核心创新及可验证依据。");
+            MissingContent(result, text, "D-PLAN-01", @"研究计划|实施计划|进度安排", RiskLevel.High, "缺少实施计划", "补充阶段目标、时间节点、负责人和预期成果。");
+            MissingContent(result, text, "D-BUDGET-01", @"经费|预算|支出", RiskLevel.Medium, "缺少经费说明", "核对预算、支出科目和学校财务要求。");
+            MissingContent(result, text, "D-ADVISOR-01", @"指导教师|指导老师", RiskLevel.Medium, "未识别到指导教师信息", "补充指导教师姓名、单位和职责。");
+        }
+        else if (scenario == ReviewScenario.ElectronicDesign)
+        {
+            MissingContent(result, text, "E-SYSTEM-01", @"系统方案|总体方案|方案论证", RiskLevel.High, "缺少系统方案", "补充总体框图、方案比较和选型依据。");
+            MissingContent(result, text, "E-CIRCUIT-01", @"电路|原理图|硬件设计", RiskLevel.High, "缺少电路设计说明", "补充关键电路、参数计算和器件选型。");
+            MissingContent(result, text, "E-TEST-01", @"测试方法|测试数据|测试结果", RiskLevel.High, "缺少测试过程", "补充测试条件、仪器、原始数据和指标对照。");
+        }
+        else if (scenario == ReviewScenario.ComputerDesign)
+        {
+            MissingContent(result, text, "CD-RUN-01", @"运行说明|使用说明|部署|安装", RiskLevel.High, "缺少运行说明", "补充运行环境、安装步骤、测试账号和操作流程。");
+            MissingContent(result, text, "CD-ARCH-01", @"系统架构|技术架构|总体设计", RiskLevel.Medium, "缺少技术架构说明", "补充主要模块、数据流和关键技术选择。");
+            MissingContent(result, text, "CD-IP-01", @"原创|知识产权|版权|著作权", RiskLevel.High, "缺少原创或版权说明", "列明原创内容、第三方素材来源和知识产权归属。");
+        }
+        else if (scenario == ReviewScenario.LanQiaoCup)
+        {
+            MissingContent(result, text, "L-ENV-01", @"开发环境|运行环境|编译环境|版本", RiskLevel.High, "缺少运行环境说明", "写明语言、框架、依赖版本和运行平台。");
+            MissingContent(result, text, "L-RUN-01", @"运行步骤|使用说明|启动|README", RiskLevel.High, "缺少运行步骤", "提供从解压、安装依赖到启动程序的完整步骤。");
+            MissingContent(result, text, "L-ORIGINAL-01", @"原创|独立完成|知识产权", RiskLevel.Medium, "缺少原创性说明", "补充原创声明和第三方依赖清单。");
+        }
         if (!Regex.IsMatch(text, @"签字|签名|盖章|公章") && Regex.IsMatch(names, "承诺|声明"))
             result.Add(New("C-SIGN-01", RiskLevel.High, "承诺材料可能缺少签署信息", "承诺材料的可提取文本中没有出现签字或盖章信息。", "承诺材料", "未检出签署字段", "查看原件并确认签名、日期和盖章是否完整。"));
         return result;
+    }
+
+    private static List<Finding> ReviewArchives(IReadOnlyList<ParsedDocument> docs)
+    {
+        var result = new List<Finding>();
+        var summaries = docs.Where(x => x.Parser == "ZIP 清单").ToArray();
+        for (var index = 0; index < summaries.Length; index++)
+        {
+            var summary = summaries[index];
+            var text = string.Join('\n', summary.Pages);
+            var entryCount = Marker(text, "ZIP_ENTRY_COUNT");
+            var supportedCount = Marker(text, "ZIP_SUPPORTED_COUNT");
+            var unsafeCount = Marker(text, "ZIP_UNSAFE_COUNT");
+            if (entryCount == 0)
+                result.Add(New($"Z-EMPTY-{index + 1:00}", RiskLevel.Blocking, "ZIP 压缩包为空", "压缩包中没有可审查的文件。", summary.Name, "文件数量：0", "重新打包全部参赛材料后再上传。"));
+            if (unsafeCount > 0)
+                result.Add(New($"Z-PATH-{index + 1:00}", RiskLevel.Blocking, "ZIP 包含危险文件路径", $"检测到 {unsafeCount} 个可能越过解压目录的文件路径，系统已跳过这些条目。", summary.Name, $"危险路径：{unsafeCount} 个", "删除异常路径文件，并使用普通相对目录重新生成 ZIP。"));
+            if (entryCount > 0 && supportedCount == 0)
+                result.Add(New($"Z-FORMAT-{index + 1:00}", RiskLevel.High, "ZIP 中没有可解析的正文材料", "压缩包中未发现 PDF、DOCX、XLSX 或常见文本文件，当前只能依据文件名检查清单。", summary.Name, "可解析文件：0", "至少加入一份可解析的申报书、报告或说明文档。"));
+        }
+        return result;
+    }
+
+    private static int Marker(string text, string name)
+    {
+        var match = Regex.Match(text, $@"(?m)^{Regex.Escape(name)}=(\d+)$");
+        return match.Success ? int.Parse(match.Groups[1].Value) : 0;
     }
 
     private static void MissingContent(List<Finding> result, string text, string id, string pattern, RiskLevel level, string title, string suggestion)

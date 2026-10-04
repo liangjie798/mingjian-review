@@ -8,6 +8,7 @@ using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 
 namespace MingJian.Desktop;
 
@@ -27,6 +28,7 @@ public partial class MainWindow : Window
     private bool _scenarioTransitioning;
     private (ReviewScenario Scenario, Button Nav)? _queuedReviewNavigation;
     private double _themeRotation;
+    private bool _competitionExpanded = true;
 
     public MainWindow()
     {
@@ -47,10 +49,18 @@ public partial class MainWindow : Window
     private void ToggleMaximize() => WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
     private void Close_Click(object sender, RoutedEventArgs e) => Close();
 
-    private async void CompetitionNav_Click(object sender, RoutedEventArgs e) => await NavigateReviewAsync(ReviewScenario.Competition, CompetitionNav);
+    private async void CompetitionNav_Click(object sender, RoutedEventArgs e)
+    {
+        _ = ToggleCompetitionMenuAsync();
+        await NavigateReviewAsync(ReviewScenario.Competition, CompetitionNav);
+    }
     private async void MathModelingNav_Click(object sender, RoutedEventArgs e) => await NavigateReviewAsync(ReviewScenario.MathModeling, MathModelingNav);
     private async void InternetPlusNav_Click(object sender, RoutedEventArgs e) => await NavigateReviewAsync(ReviewScenario.InternetPlus, InternetPlusNav);
     private async void ChallengeCupNav_Click(object sender, RoutedEventArgs e) => await NavigateReviewAsync(ReviewScenario.ChallengeCup, ChallengeCupNav);
+    private async void InnovationTrainingNav_Click(object sender, RoutedEventArgs e) => await NavigateReviewAsync(ReviewScenario.InnovationTraining, InnovationTrainingNav);
+    private async void ElectronicDesignNav_Click(object sender, RoutedEventArgs e) => await NavigateReviewAsync(ReviewScenario.ElectronicDesign, ElectronicDesignNav);
+    private async void ComputerDesignNav_Click(object sender, RoutedEventArgs e) => await NavigateReviewAsync(ReviewScenario.ComputerDesign, ComputerDesignNav);
+    private async void LanQiaoCupNav_Click(object sender, RoutedEventArgs e) => await NavigateReviewAsync(ReviewScenario.LanQiaoCup, LanQiaoCupNav);
     private async void ContractReviewNav_Click(object sender, RoutedEventArgs e) => await NavigateReviewAsync(ReviewScenario.Contract, ContractReviewNav);
     private async void CompareNav_Click(object sender, RoutedEventArgs e) => await ShowPageAsync(ComparePage, "合同对比", CompareNav);
     private async void GuideNav_Click(object sender, RoutedEventArgs e) => await ShowPageAsync(GuidePage, "使用指南", GuideNav);
@@ -116,7 +126,30 @@ public partial class MainWindow : Window
         }
     }
 
-    private Button[] ReviewNavigationButtons() => [CompetitionNav, MathModelingNav, InternetPlusNav, ChallengeCupNav, ContractReviewNav, CompareNav, GuideNav];
+    private Button[] ReviewNavigationButtons() => [CompetitionNav, MathModelingNav, InternetPlusNav, ChallengeCupNav, InnovationTrainingNav, ElectronicDesignNav, ComputerDesignNav, LanQiaoCupNav, ContractReviewNav, CompareNav, GuideNav];
+
+    private async Task ToggleCompetitionMenuAsync()
+    {
+        _competitionExpanded = !_competitionExpanded;
+        if (CompetitionChevron.RenderTransform is RotateTransform rotation)
+            rotation.BeginAnimation(RotateTransform.AngleProperty, new DoubleAnimation(
+                _competitionExpanded ? -90 : 0,
+                _competitionExpanded ? 0 : -90,
+                TimeSpan.FromMilliseconds(MotionService.Duration(180)))
+            { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } });
+
+        if (_competitionExpanded)
+        {
+            CompetitionSubmenu.Visibility = Visibility.Visible;
+            MotionService.PrepareEnter(CompetitionSubmenu, -8, 0);
+            MotionService.Animate(CompetitionSubmenu, 1, 0, 210);
+            return;
+        }
+
+        MotionService.Animate(CompetitionSubmenu, 0, -8, 150);
+        await Task.Delay(MotionService.Duration(155));
+        if (!_competitionExpanded) CompetitionSubmenu.Visibility = Visibility.Collapsed;
+    }
 
     private async Task SwitchScenarioAsync(ReviewScenario scenario)
     {
@@ -156,7 +189,7 @@ public partial class MainWindow : Window
 
     private void AddFiles_Click(object sender, RoutedEventArgs e)
     {
-        var dialog = new OpenFileDialog { Multiselect = true, Filter = "支持的材料|*.pdf;*.docx;*.xlsx;*.txt;*.md;*.csv;*.json|所有文件|*.*" };
+        var dialog = new OpenFileDialog { Multiselect = true, Filter = "支持的材料|*.pdf;*.docx;*.xlsx;*.txt;*.md;*.csv;*.json;*.zip|ZIP 压缩包|*.zip|所有文件|*.*" };
         if (dialog.ShowDialog(this) == true) AddFiles(dialog.FileNames);
     }
     private void DropZone_DragEnter(object sender, DragEventArgs e) => e.Effects = e.Data.GetDataPresent(DataFormats.FileDrop) ? DragDropEffects.Copy : DragDropEffects.None;

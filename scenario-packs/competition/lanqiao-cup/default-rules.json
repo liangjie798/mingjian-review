@@ -1,0 +1,5 @@
+[
+  { "ruleId": "lanqiao-cup.required_documents", "severity": "blocking", "description": "检查参赛信息、源代码和说明文档" },
+  { "ruleId": "lanqiao-cup.environment", "severity": "high", "description": "检查开发环境和运行步骤" },
+  { "ruleId": "lanqiao-cup.originality", "severity": "medium", "description": "检查原创性和第三方依赖" }
+]

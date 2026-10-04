@@ -3,7 +3,18 @@ using System.Windows.Media;
 
 namespace MingJian.Desktop;
 
-public enum ReviewScenario { Competition, MathModeling, InternetPlus, ChallengeCup, Contract }
+public enum ReviewScenario
+{
+    Competition,
+    MathModeling,
+    InternetPlus,
+    ChallengeCup,
+    InnovationTraining,
+    ElectronicDesign,
+    ComputerDesign,
+    LanQiaoCup,
+    Contract
+}
 public enum RiskLevel { Blocking, High, Medium, Info }
 
 public sealed record ReviewScenarioProfile(string Title, string Subtitle, string SectionLabel, string ReportLabel, string AiInstruction);
@@ -32,6 +43,30 @@ public static class ReviewScenarios
             "竞赛材料审查 / 挑战杯",
             "挑战杯竞赛材料审查",
             "挑战杯竞赛材料，重点核对申报书、项目或调研报告、实践证明、社会价值、创新点、成果依据、指导教师和学校信息。"),
+        ReviewScenario.InnovationTraining => new(
+            "大学生创新创业训练计划审查",
+            "检查申报、中期或结题材料、成果附件与经费信息",
+            "竞赛材料审查 / 大创计划",
+            "大学生创新创业训练计划材料审查",
+            "大学生创新创业训练计划材料，重点核对申报书或任务书、中期或结题报告、成果附件、创新点、研究计划、经费使用、成员分工和指导教师信息。"),
+        ReviewScenario.ElectronicDesign => new(
+            "全国大学生电子设计竞赛审查",
+            "检查设计报告、源程序、测试记录与技术指标",
+            "竞赛材料审查 / 电子设计竞赛",
+            "全国大学生电子设计竞赛材料审查",
+            "全国大学生电子设计竞赛材料，重点核对设计报告、源程序、测试记录、系统方案、电路设计、测试方法、技术指标和队伍信息。"),
+        ReviewScenario.ComputerDesign => new(
+            "中国大学生计算机设计大赛审查",
+            "检查作品申报、说明文档、演示材料与原创声明",
+            "竞赛材料审查 / 计算机设计大赛",
+            "中国大学生计算机设计大赛材料审查",
+            "中国大学生计算机设计大赛材料，重点核对作品申报书、作品说明书、演示视频或展示材料、源文件、运行说明、原创性与知识产权声明。"),
+        ReviewScenario.LanQiaoCup => new(
+            "蓝桥杯竞赛材料审查",
+            "检查参赛信息、源代码、运行说明与原创性",
+            "竞赛材料审查 / 蓝桥杯",
+            "蓝桥杯竞赛材料审查",
+            "蓝桥杯竞赛材料，重点核对参赛信息、源代码、说明文档、开发环境、运行步骤、文件命名和原创性声明。"),
         ReviewScenario.Contract => new(
             "合同条款审查",
             "检查主体、付款、验收、违约责任与关键条款风险",

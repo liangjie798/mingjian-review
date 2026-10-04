@@ -1,0 +1,5 @@
+[
+  { "ruleId": "innovation-training.required_documents", "severity": "blocking", "description": "检查申报书或任务书、中期或结题材料" },
+  { "ruleId": "innovation-training.plan", "severity": "high", "description": "检查创新点、实施计划和阶段成果" },
+  { "ruleId": "innovation-training.budget", "severity": "medium", "description": "检查经费预算与使用说明" }
+]
