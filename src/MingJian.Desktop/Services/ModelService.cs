@@ -43,7 +43,7 @@ public static class ModelService
         }
         var names = string.Join("、", documents.Select(x => x.Name));
         var system = "你是严谨的中文材料审查员。只根据原文指出可验证的问题，不得虚构条款、数字或页码。只输出 JSON。";
-        var user = $"审查场景：{ReviewScenarios.Get(scenario).AiInstruction}。找出最多8个高价值问题，没有可靠问题时返回空数组。返回 findings 数组；每项包含 severity、title、detail、file、page、excerpt、suggestion。severity只能是blocking、high、medium或info。可用文件名：{names}\n材料：\n{material}";
+        var user = $"审查场景：{ReviewScenarios.Get(scenario).AiInstruction}。找出最多8个高价值问题，没有可靠问题时返回空数组。返回 findings 数组；每项包含 severity、title、detail、file、page、excerpt、suggestion。page必须是JSON整数，不能加引号；severity只能是blocking、high、medium或info。可用文件名：{names}\n材料：\n{material}";
         var content = config.Provider == "embedded"
             ? await EmbeddedChat(config, system, user)
             : await CloudChat(config, system, user);
@@ -150,29 +150,60 @@ public static class ModelService
         return await output;
     }
 
-    private static List<Finding> ParseFindings(string content, IReadOnlyList<ParsedDocument> docs)
+    internal static List<Finding> ParseFindings(string content, IReadOnlyList<ParsedDocument> docs)
     {
         content = Regex.Replace(content, @"<think>[\s\S]*?</think>", "").Trim();
-        var match = Regex.Match(content, @"\{[\s\S]*\}");
-        var root = JsonNode.Parse(match.Success ? match.Value : content);
-        var items = root is JsonArray array ? array : root?["findings"]?.AsArray();
+        content = Regex.Replace(content, @"^```(?:json)?\s*|\s*```$", "", RegexOptions.IgnoreCase).Trim();
+        var root = ParseJsonPayload(content);
+        var items = root as JsonArray ?? (root as JsonObject)?["findings"] as JsonArray;
         var result = new List<Finding>();
         if (items is null) return result;
         foreach (var item in items.Take(8))
         {
-            var file = item?["file"]?.GetValue<string>() ?? "";
+            if (item is not JsonObject finding) continue;
+            var file = TextValue(finding["file"]);
             var doc = docs.FirstOrDefault(x => x.Name == file);
-            if (doc is null) continue;
-            var page = Math.Clamp(item?["page"]?.GetValue<int>() ?? 1, 1, doc.Pages.Length);
-            var excerpt = item?["excerpt"]?.GetValue<string>()?.Trim() ?? "";
+            if (doc is null || doc.Pages.Length == 0) continue;
+            var page = Math.Clamp(PageValue(finding["page"]), 1, Math.Max(1, doc.Pages.Length));
+            var excerpt = TextValue(finding["excerpt"]).Trim();
             if (excerpt.Length < 4 || !doc.Pages[page - 1].Contains(excerpt, StringComparison.Ordinal)) continue;
-            var severity = (item?["severity"]?.GetValue<string>() ?? "medium") switch { "blocking" => RiskLevel.Blocking, "high" => RiskLevel.High, "info" => RiskLevel.Info, _ => RiskLevel.Medium };
-            var title = item?["title"]?.GetValue<string>()?.Trim();
-            var detail = item?["detail"]?.GetValue<string>()?.Trim();
-            var suggestion = item?["suggestion"]?.GetValue<string>()?.Trim();
+            var severity = TextValue(finding["severity"]).ToLowerInvariant() switch { "blocking" => RiskLevel.Blocking, "high" => RiskLevel.High, "info" => RiskLevel.Info, _ => RiskLevel.Medium };
+            var title = TextValue(finding["title"]).Trim();
+            var detail = TextValue(finding["detail"]).Trim();
+            var suggestion = TextValue(finding["suggestion"]).Trim();
             if (string.IsNullOrWhiteSpace(title) || string.IsNullOrWhiteSpace(detail) || string.IsNullOrWhiteSpace(suggestion)) continue;
             result.Add(new() { Id = $"AI-{result.Count + 1:000}", Severity = severity, Title = title, Detail = detail, Evidence = new(file, page, excerpt), Suggestion = suggestion, IsModel = true });
         }
         return result;
+    }
+
+    private static JsonNode? ParseJsonPayload(string content)
+    {
+        try { return JsonNode.Parse(content); }
+        catch (JsonException)
+        {
+            var objectStart = content.IndexOf('{');
+            var arrayStart = content.IndexOf('[');
+            var start = objectStart < 0 ? arrayStart : arrayStart < 0 ? objectStart : Math.Min(objectStart, arrayStart);
+            var end = Math.Max(content.LastIndexOf('}'), content.LastIndexOf(']'));
+            if (start < 0 || end <= start) throw;
+            return JsonNode.Parse(content[start..(end + 1)]);
+        }
+    }
+
+    private static int PageValue(JsonNode? node)
+    {
+        if (node is not JsonValue value) return 1;
+        if (value.TryGetValue<int>(out var number)) return number;
+        if (value.TryGetValue<long>(out var longNumber) && longNumber is >= int.MinValue and <= int.MaxValue) return (int)longNumber;
+        if (value.TryGetValue<double>(out var decimalNumber) && double.IsFinite(decimalNumber)) return (int)Math.Round(decimalNumber);
+        if (value.TryGetValue<string>(out var text) && int.TryParse(text, out number)) return number;
+        return 1;
+    }
+
+    private static string TextValue(JsonNode? node)
+    {
+        if (node is not JsonValue value) return "";
+        return value.TryGetValue<string>(out var text) ? text ?? "" : value.ToJsonString().Trim('"');
     }
 }
