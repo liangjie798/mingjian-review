@@ -1,0 +1,5 @@
+[
+  { "ruleId": "internet-plus.required_documents", "severity": "blocking", "description": "检查申报书、商业计划书和路演材料" },
+  { "ruleId": "internet-plus.business_content", "severity": "high", "description": "检查市场、商业模式和财务数据" },
+  { "ruleId": "internet-plus.intellectual_property", "severity": "medium", "description": "检查知识产权说明" }
+]

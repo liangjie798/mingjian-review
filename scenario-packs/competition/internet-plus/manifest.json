@@ -1,0 +1,7 @@
+{
+  "id": "competition.internet-plus",
+  "name": "互联网+ / 创新大赛材料审查",
+  "version": "0.1.0",
+  "documentTypes": ["application", "business_plan", "pitch_deck", "evidence"],
+  "factFields": ["project_name", "market", "business_model", "finance", "intellectual_property", "members"]
+}

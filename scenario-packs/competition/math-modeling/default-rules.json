@@ -1,0 +1,5 @@
+[
+  { "ruleId": "math.required_paper", "severity": "blocking", "description": "检查论文或答卷是否存在" },
+  { "ruleId": "math.paper_structure", "severity": "high", "description": "检查摘要、关键词、模型假设和参考文献" },
+  { "ruleId": "math.supporting_material", "severity": "high", "description": "检查支撑材料、代码或数据附件" }
+]

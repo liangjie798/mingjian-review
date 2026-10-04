@@ -1,0 +1,7 @@
+{
+  "id": "competition.challenge-cup",
+  "name": "挑战杯材料审查",
+  "version": "0.1.0",
+  "documentTypes": ["application", "project_report", "research_report", "evidence"],
+  "factFields": ["project_name", "social_value", "innovation", "practice", "advisor", "school"]
+}

@@ -1,0 +1,5 @@
+[
+  { "ruleId": "challenge-cup.required_documents", "severity": "blocking", "description": "检查申报书、项目或调研报告" },
+  { "ruleId": "challenge-cup.value_and_innovation", "severity": "high", "description": "检查社会价值和创新点" },
+  { "ruleId": "challenge-cup.practice_evidence", "severity": "medium", "description": "检查实践过程和证明材料" }
+]

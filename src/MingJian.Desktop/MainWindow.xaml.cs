@@ -25,6 +25,7 @@ public partial class MainWindow : Window
     private FrameworkElement? _activePage;
     private int _pageTransitionVersion;
     private bool _scenarioTransitioning;
+    private (ReviewScenario Scenario, Button Nav)? _queuedReviewNavigation;
     private double _themeRotation;
 
     public MainWindow()
@@ -34,7 +35,7 @@ public partial class MainWindow : Window
         FindingsList.ItemsSource = _findings;
         UpdateScenario();
         UpdateModelStatus();
-        Loaded += async (_, _) => await ShowPageAsync(ReviewPage, "材料审查", ReviewNav);
+        Loaded += async (_, _) => await ShowPageAsync(ReviewPage, ReviewScenarios.Get(_scenario).SectionLabel, CompetitionNav);
     }
 
     private void TitleBar_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
@@ -46,9 +47,35 @@ public partial class MainWindow : Window
     private void ToggleMaximize() => WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
     private void Close_Click(object sender, RoutedEventArgs e) => Close();
 
-    private async void ReviewNav_Click(object sender, RoutedEventArgs e) => await ShowPageAsync(ReviewPage, "材料审查", ReviewNav);
+    private async void CompetitionNav_Click(object sender, RoutedEventArgs e) => await NavigateReviewAsync(ReviewScenario.Competition, CompetitionNav);
+    private async void MathModelingNav_Click(object sender, RoutedEventArgs e) => await NavigateReviewAsync(ReviewScenario.MathModeling, MathModelingNav);
+    private async void InternetPlusNav_Click(object sender, RoutedEventArgs e) => await NavigateReviewAsync(ReviewScenario.InternetPlus, InternetPlusNav);
+    private async void ChallengeCupNav_Click(object sender, RoutedEventArgs e) => await NavigateReviewAsync(ReviewScenario.ChallengeCup, ChallengeCupNav);
+    private async void ContractReviewNav_Click(object sender, RoutedEventArgs e) => await NavigateReviewAsync(ReviewScenario.Contract, ContractReviewNav);
     private async void CompareNav_Click(object sender, RoutedEventArgs e) => await ShowPageAsync(ComparePage, "合同对比", CompareNav);
     private async void GuideNav_Click(object sender, RoutedEventArgs e) => await ShowPageAsync(GuidePage, "使用指南", GuideNav);
+
+    private async Task NavigateReviewAsync(ReviewScenario scenario, Button nav)
+    {
+        var profile = ReviewScenarios.Get(scenario);
+        if (_activePage != ReviewPage)
+        {
+            _scenario = scenario;
+            UpdateScenario();
+            await ShowPageAsync(ReviewPage, profile.SectionLabel, nav);
+            return;
+        }
+
+        _selectedNav = nav;
+        ApplyNavigationStyles();
+        WindowSection.Text = profile.SectionLabel;
+        if (_scenarioTransitioning)
+        {
+            _queuedReviewNavigation = (scenario, nav);
+            return;
+        }
+        await SwitchScenarioAsync(scenario);
+    }
 
     private async Task ShowPageAsync(FrameworkElement page, string label, Button nav)
     {
@@ -82,21 +109,19 @@ public partial class MainWindow : Window
 
     private void ApplyNavigationStyles()
     {
-        foreach (var button in new[] { ReviewNav, CompareNav, GuideNav })
+        foreach (var button in ReviewNavigationButtons())
         {
             button.Background = button == _selectedNav ? (Brush)FindResource("AccentDarkBrush") : Brushes.Transparent;
             button.Foreground = button == _selectedNav ? (Brush)FindResource("AccentBrush") : (Brush)FindResource("MutedBrush");
         }
     }
 
-    private async void Competition_Click(object sender, RoutedEventArgs e) => await SwitchScenarioAsync(ReviewScenario.Competition);
-    private async void Contract_Click(object sender, RoutedEventArgs e) => await SwitchScenarioAsync(ReviewScenario.Contract);
+    private Button[] ReviewNavigationButtons() => [CompetitionNav, MathModelingNav, InternetPlusNav, ChallengeCupNav, ContractReviewNav, CompareNav, GuideNav];
+
     private async Task SwitchScenarioAsync(ReviewScenario scenario)
     {
-        if (_scenarioTransitioning || _scenario == scenario) return;
+        if (_scenario == scenario) return;
         _scenarioTransitioning = true;
-        CompetitionButton.IsEnabled = false;
-        ContractButton.IsEnabled = false;
         try
         {
             MotionService.Animate(ReviewPage, 0.25, -10, 105);
@@ -110,30 +135,23 @@ public partial class MainWindow : Window
         }
         finally
         {
-            CompetitionButton.IsEnabled = true;
-            ContractButton.IsEnabled = true;
             _scenarioTransitioning = false;
+        }
+        if (_queuedReviewNavigation is { } queued)
+        {
+            _queuedReviewNavigation = null;
+            await NavigateReviewAsync(queued.Scenario, queued.Nav);
         }
     }
     private void UpdateScenario()
     {
-        var competition = _scenario == ReviewScenario.Competition;
-        PageTitle.Text = competition ? "大学生竞赛材料审查" : "合同条款审查";
-        PageSubtitle.Text = competition ? "核对材料完整性、团队信息与跨文件一致性" : "检查主体、付款、验收、违约责任与关键条款风险";
-        ApplyScenarioStyles();
+        var profile = ReviewScenarios.Get(_scenario);
+        PageTitle.Text = profile.Title;
+        PageSubtitle.Text = profile.Subtitle;
         _findings.Clear();
         ExportButton.IsEnabled = false;
         UpdateMetrics();
         ClearDetail();
-    }
-
-    private void ApplyScenarioStyles()
-    {
-        var competition = _scenario == ReviewScenario.Competition;
-        CompetitionButton.Background = competition ? (Brush)FindResource("AccentDarkBrush") : Brushes.Transparent;
-        CompetitionButton.Foreground = competition ? (Brush)FindResource("AccentBrush") : (Brush)FindResource("MutedBrush");
-        ContractButton.Background = !competition ? (Brush)FindResource("AccentDarkBrush") : Brushes.Transparent;
-        ContractButton.Foreground = !competition ? (Brush)FindResource("AccentBrush") : (Brush)FindResource("MutedBrush");
     }
 
     private void AddFiles_Click(object sender, RoutedEventArgs e)
@@ -193,7 +211,7 @@ public partial class MainWindow : Window
         if (dialog.ShowDialog(this) != true) return;
         var lines = new List<string>
         {
-            "# 明鉴材料审查报告", "", $"- 审查场景：{(_scenario == ReviewScenario.Contract ? "合同审查" : "大学生竞赛材料审查")}",
+            "# 明鉴材料审查报告", "", $"- 审查场景：{ReviewScenarios.Get(_scenario).ReportLabel}",
             $"- 生成时间：{DateTime.Now:yyyy-MM-dd HH:mm}", $"- 材料数量：{_files.Count}", $"- 待核对项：{_findings.Count}", "", "## 审查发现", ""
         };
         foreach (var item in _findings)
@@ -245,7 +263,6 @@ public partial class MainWindow : Window
         ThemeService.ApplyAnimated(Application.Current.Resources, nextDark, TimeSpan.FromMilliseconds(300));
         _dark = nextDark;
         ApplyNavigationStyles();
-        ApplyScenarioStyles();
         ThemeButton.Content = _dark ? "\uE706" : "\uE708";
         MotionService.AnimateThemeIcon(ThemeButton, _themeRotation, _themeRotation + 180, 340);
         _themeRotation += 180;

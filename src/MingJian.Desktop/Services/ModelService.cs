@@ -43,7 +43,7 @@ public static class ModelService
         }
         var names = string.Join("、", documents.Select(x => x.Name));
         var system = "你是严谨的中文材料审查员。只根据原文指出可验证的问题，不得虚构条款、数字或页码。只输出 JSON。";
-        var user = $"审查场景：{(scenario == ReviewScenario.Contract ? "合同材料" : "大学生竞赛材料")}。找出最多8个高价值问题，没有可靠问题时返回空数组。返回 findings 数组；每项包含 severity、title、detail、file、page、excerpt、suggestion。severity只能是blocking、high、medium或info。可用文件名：{names}\n材料：\n{material}";
+        var user = $"审查场景：{ReviewScenarios.Get(scenario).AiInstruction}。找出最多8个高价值问题，没有可靠问题时返回空数组。返回 findings 数组；每项包含 severity、title、detail、file、page、excerpt、suggestion。severity只能是blocking、high、medium或info。可用文件名：{names}\n材料：\n{material}";
         var content = config.Provider == "embedded"
             ? await EmbeddedChat(config, system, user)
             : await CloudChat(config, system, user);

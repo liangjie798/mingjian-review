@@ -35,6 +35,33 @@ public sealed class ReviewEngineTests : IDisposable
     }
 
     [Fact]
+    public async Task MathModelingReview_ChecksPaperStructure()
+    {
+        var path = Write("数学建模论文.txt", "论文名称：交通调度模型\n团队成员：张三、李四、王五\n联系方式：13800138000");
+        var result = await new ReviewEngine().ReviewAsync(ReviewScenario.MathModeling, [path], new() { Enabled = false });
+
+        Assert.Contains(result.Findings, x => x.Id == "M-STRUCT-01");
+        Assert.Contains(result.Findings, x => x.Id == "M-STRUCT-04");
+        Assert.Contains(result.Findings, x => x.Title.Contains("支撑材料"));
+    }
+
+    [Fact]
+    public async Task InternetPlusReview_UsesDedicatedBusinessRules()
+    {
+        var files = new[]
+        {
+            Write("项目申报书.txt", "项目名称：星火平台\n联系方式：13800138000"),
+            Write("商业计划书.txt", "项目名称：星火平台\n市场分析：面向高校用户"),
+            Write("路演PPT.txt", "项目名称：星火平台")
+        };
+        var result = await new ReviewEngine().ReviewAsync(ReviewScenario.InternetPlus, files, new() { Enabled = false });
+
+        Assert.Contains(result.Findings, x => x.Id == "I-BUSINESS-01");
+        Assert.DoesNotContain(result.Findings, x => x.Title.Contains("商业计划书"));
+        Assert.Equal("互联网+ / 创新大赛材料审查", ReviewScenarios.Get(ReviewScenario.InternetPlus).Title);
+    }
+
+    [Fact]
     public async Task TextParser_PreservesChineseContent()
     {
         var path = Write("材料.md", "# 项目说明\n这是审查材料。\n");

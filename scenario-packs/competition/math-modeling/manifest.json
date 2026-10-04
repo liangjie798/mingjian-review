@@ -1,0 +1,7 @@
+{
+  "id": "competition.math-modeling",
+  "name": "数学建模材料审查",
+  "version": "0.1.0",
+  "documentTypes": ["paper", "answer", "supporting_material", "data", "code"],
+  "factFields": ["paper_title", "members", "advisor", "abstract", "keywords", "assumptions", "references"]
+}
